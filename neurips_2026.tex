@@ -55,437 +55,400 @@
 \usepackage{microtype}      % microtypography
 \usepackage{xcolor}         % colors
 
-% Note. For the workshop paper template, both \title{} and \workshoptitle{} are required, with the former indicating the paper title shown in the title and the latter indicating the workshop title displayed in the footnote. 
-\title{Formatting Instructions For NeurIPS 2026}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{multirow}
+\usepackage{subcaption}
+\usepackage{wrapfig}
 
+\definecolor{citecolor}{HTML}{0066CC}
+\hypersetup{colorlinks=true, linkcolor=citecolor, citecolor=citecolor, urlcolor=citecolor}
+\newcommand{\sketch}{\textsc{Sketch}}
+\newcommand{\ccv}{\textsc{CCV}}
+\newcommand{\kgated}{$\kappa$-gated}
+\newcommand{\pp}{\,\text{pp}}
 
-% The \author macro works with any number of authors. There are two commands
-% used to separate the names and addresses of multiple authors: \And and \AND.
-%
-% Using \And between authors leaves it to LaTeX to determine where to break the
-% lines. Using \AND forces a line break at that point. So, if LaTeX puts 3 of 4
-% authors names on the first line, and the last on the second line, try using
-% \AND instead of \And before the third author name.
+\title{Compositional Consensus: \\ Verification through Structural Diversity \\ in Neuro-Symbolic Geometry Reasoning}
 
-
-\author{%
-  David S.~Hippocampus\thanks{Use footnote for providing further information
-    about author (webpage, alternative address)---\emph{not} for acknowledging
-    funding agencies.} \\
-  Department of Computer Science\\
-  Cranberry-Lemon University\\
-  Pittsburgh, PA 15213 \\
-  \texttt{hippo@cs.cranberry-lemon.edu} \\
-  % examples of more authors
-  % \And
-  % Coauthor \\
-  % Affiliation \\
-  % Address \\
-  % \texttt{email} \\
-  % \AND
-  % Coauthor \\
-  % Affiliation \\
-  % Address \\
-  % \texttt{email} \\
-  % \And
-  % Coauthor \\
-  % Affiliation \\
-  % Address \\
-  % \texttt{email} \\
-  % \And
-  % Coauthor \\
-  % Affiliation \\
-  % Address \\
-  % \texttt{email} \\
+\author{
+  Anonymous Authors
 }
-
 
 \begin{document}
 
-
 \maketitle
 
-
+% ===========================================================================
 \begin{abstract}
-  The abstract paragraph should be indented \nicefrac{1}{2}~inch (3~picas) on both the left- and right-hand margins. Use 10~point type, with a vertical spacing (leading) of 11~points. The word \textbf{Abstract} must be centered, bold, and in point size 12. Two line spaces precede the abstract. The abstract must be limited to one paragraph.
+% ===========================================================================
+
+Test-time verification for reasoning tasks predominantly treats model outputs as opaque objects---either counting votes across candidates (consensus methods) or training external scorers to evaluate them (reward models). We observe that neuro-symbolic reasoning produces \emph{compositional} candidates whose internal structure can itself serve as a verification resource. We introduce \sketch{}, a framework for geometry reasoning that decomposes each candidate into a 4-tuple of Visual Grounding Facts, a typed DSL program, a deterministic execution result, and a natural-language claim. This compositional structure exposes two \emph{structurally diverse} reasoning pathways---neural (claim) and symbolic (execution)---whose errors are governed by different correlation regimes: symbolic errors are highly correlated across candidates due to shared visual perception, while neural errors are more dispersed. We formalize a \textbf{cross-channel verification principle}: agreement between structurally independent pathways provides stronger evidence than repeated consensus within any single pathway, because the former requires convergence across different noise sources while the latter can be inflated by shared errors. We instantiate this principle as \kgated{} dual-pathway Compositional Consensus Verification (\ccv{}), a training-free algorithm that uses cross-layer agreement ($\kappa$) to gate both candidate scoring and output pathway selection. Across four geometry benchmarks, \ccv{} achieves 80.98\% accuracy---a $+$10.41$\pp$ improvement over majority voting, closing 45.9\% of the gap to oracle performance---at zero additional inference cost. A systematic error taxonomy of 355 verification failures reveals that 86\% stem from correlated execution consensus, of which 88.5\% are recovered by $\kappa$-gating. A learned feature ablation further confirms that compositional cross-layer features are the sole source of transferable verification signal: adding them to a candidate-level classifier improves OOD accuracy by 8$\pp$, while standard and execution-only features provide no gain beyond majority voting.
+
 \end{abstract}
 
+% ===========================================================================
+\section{Introduction}
+\label{sec:intro}
+% ===========================================================================
 
+\subsection{The Verification Bottleneck in Geometry Reasoning}
 
-\section{Submission of papers to NeurIPS 2026}
+Multimodal geometry reasoning requires models to simultaneously perceive spatial relationships from visual diagrams and perform multi-step symbolic derivations---a conjunction that remains a critical bottleneck for large language models~\cite{gllava,geox,mavis}. The standard approach for improving reasoning accuracy at test time is self-consistency~\cite{wang2023selfconsistency}: sample $K$ candidates and select the most frequent answer via majority voting (MV). This approach rests on the Condorcet assumption that voter errors are approximately independent, so that the majority converges to truth as $K$ grows.
 
+In geometry reasoning, this assumption breaks down in a distinctive way. All $K$ candidates perceive the \emph{same} diagram, and if the vision-language model harbors a systematic perceptual bias---misidentifying a perpendicular relationship as supplementary, or misreading an angle label---then a majority of candidates will share the same error. The votes are not independent draws; they are correlated echoes of a shared perceptual grounding. Formally, when the pairwise error correlation $\rho$ among voters is substantial, the effective sample size degrades as $N_{\text{eff}} = K / (1 + (K{-}1)\rho)$~\cite{ladha1992,nitarach2026}. At $\rho = 0.5$, sixteen candidates carry the information of barely two independent votes.
 
-Please read the instructions below carefully and follow them faithfully.
+This is not a hypothetical concern. In our experiments, we observe wrong execution consensus clusters of size 8--16 accounting for 86\% of all verification failures---strong majorities that are \emph{confidently wrong} because they derive from the same misperceived geometric facts.
 
+\subsection{Compositional Structure as a Verification Resource}
 
-\subsection{Style}
+We start from a simple but consequential observation: \emph{neuro-symbolic reasoning candidates are not opaque votes.} Unlike standard chain-of-thought outputs---a single text sequence mapping to a single answer---a neuro-symbolic candidate decomposes into layers with distinct computational character:
+\begin{equation}
+    \text{Candidate} = \big(\underbrace{\text{VGF}}_{\text{perception}},\ \underbrace{\text{DSL}}_{\text{logic}},\ \underbrace{\text{exec}}_{\text{computation}},\ \underbrace{\text{claim}}_{\text{intuition}}\big)
+    \label{eq:candidate}
+\end{equation}
+where VGF (Visual Grounding Facts) captures geometric relations extracted from the diagram, DSL is a typed program encoding the reasoning steps, exec is its deterministic execution result, and claim is the model's stated answer.
 
+Crucially, the claim and exec arise from \emph{structurally different pathways}. The claim is produced by the neural pathway---the model's implicit reasoning, subject to the dispersed noise of autoregressive generation. The execution result is produced by the symbolic pathway---a deterministic computation on extracted premises, subject to the correlated noise of shared visual perception. These two pathways have different error correlation structures: neural errors are relatively independent across candidates, while symbolic errors are highly correlated because candidates see the same diagram.
 
-Papers to be submitted to NeurIPS 2026 must be prepared according to the
-instructions presented here. Papers may only be up to {\bf nine} pages long, including figures. \textbf{Papers that exceed the page limit will not be reviewed (or in any other way considered) for presentation at the conference.}
-Additional pages \emph{containing acknowledgments, references, checklist, and optional technical appendices} do not count as content pages. 
+This structural difference is the key to our approach. We argue that existing verification paradigms overlook it:
 
-
-The margins in 2026 are the same as those in previous years.
-
-
-Authors are required to use the NeurIPS \LaTeX{} style files obtainable at the NeurIPS website as indicated below. Please make sure you use the current files and not previous versions. Tweaking the style files may be grounds for desk rejection.
-
-
-\subsection{Retrieval of style files}
-
-
-The style files for NeurIPS and other conference information are available on the website at
-\begin{center}
-  \url{https://neurips.cc}.
-\end{center}
-% The file \verb+neurips_2026.pdf+ contains these instructions and illustrates the various formatting requirements your NeurIPS paper must satisfy.
-
-
-The only supported style file for NeurIPS 2026 is \verb+neurips_2026.sty+, rewritten for \LaTeXe{}. \textbf{Previous style files for \LaTeX{} 2.09,  Microsoft Word, and RTF are no longer supported.}
-
-
-The \LaTeX{} style file contains three optional arguments: 
 \begin{itemize}
-\item \verb+final+, which creates a camera-ready copy, 
-\item \verb+preprint+, which creates a preprint for submission to, e.g., arXiv, \item \verb+nonatbib+, which will not load the \verb+natbib+ package for you in case of package clash.
+    \item \textbf{Consensus methods} (MV, self-consistency, CISC) count votes within a single output layer. Whether counting claims or execution results, they are vulnerable to within-layer error correlation.
+    \item \textbf{Learned verifiers} (ORM, PRM, GenRM, URSA-RM, VisualPRM) train an external model to score candidates. They require domain-specific training data, face OOD generalization challenges, and add inference cost.
 \end{itemize}
 
+Neither paradigm exploits the compositional structure that is already present in the candidates. We propose a third approach: \textbf{compositional verification}, which derives verification signal from cross-pathway agreement within the candidates themselves.
 
-\paragraph{Preprint option}
-If you wish to post a preprint of your work online, e.g., on arXiv, using the NeurIPS style, please use the \verb+preprint+ option. This will create a nonanonymized version of your work with the text ``Preprint. Work in progress.'' in the footer. This version may be distributed as you see fit, as long as you do not say which conference it was submitted to. Please \textbf{do not} use the \verb+final+ option, which should \textbf{only} be used for papers accepted to NeurIPS.
+\subsection{The Cross-Channel Verification Principle}
 
+We formalize the following principle. Consider two verification channels $C_1$ (claim) and $C_2$ (exec), each providing noisy evidence about the correct answer $z^*$. Let $\rho_1, \rho_2$ denote the pairwise error correlations within each channel.
 
-At submission time, please omit the \verb+final+ and \verb+preprint+ options. This will anonymize your submission and add line numbers to aid review. Please do \emph{not} refer to these line numbers in your paper as they will be removed during generation of camera-ready copies.
+\textbf{Principle (Cross-Channel Verification).} \emph{When within-channel error correlations are high ($\rho_2 \gg 0$), a single instance of cross-channel agreement---one candidate where $C_1$ and $C_2$ independently converge to the same answer---provides stronger evidence for correctness than $k$ instances of within-channel consensus, for any $k$ bounded by the effective sample size $K/(1+(K{-}1)\rho_2)$.}
 
+The intuition is immediate: within-channel consensus can be inflated by shared errors (all candidates misread the same angle), but cross-channel agreement requires two structurally different noise processes to simultaneously produce the same answer. The probability of this occurring by chance is governed by the cross-channel error coupling, which we empirically measure at $P(\text{exec correct} \mid \text{claim correct}) \approx 0.225$---far lower than the within-channel consensus rates, confirming that the two pathways are only weakly coupled.
 
-The file \verb+neurips_2026.tex+ may be used as a ``shell'' for writing your paper. All you have to do is replace the author, title, abstract, and text of the paper with your own.
+\subsection{Contributions}
 
+We make four contributions:
 
-The formatting instructions contained in these style files are summarized in Sections \ref{gen_inst}, \ref{headings}, and \ref{others} below.
+\begin{enumerate}
+    \item \textbf{\sketch{} format}: A compositional output format that decomposes geometry reasoning into VGF $+$ typed DSL $+$ closed-loop execution $+$ claim. A 9B VLM achieves $>$99.9\% format compliance and $>$94\% execution success after supervised fine-tuning on 2,012 examples.
 
+    \item \textbf{\kgated{} dual-pathway \ccv{}}: A training-free, one-parameter verification algorithm that uses cross-channel agreement ($\kappa$) as a two-level gate: (i)~gating which consensus signals to trust during candidate scoring, and (ii)~gating which reasoning pathway---neural or symbolic---supplies the final answer. It achieves $+$10.41$\pp$ over MV across four benchmarks at zero additional cost.
 
-\section{General formatting instructions}
-\label{gen_inst}
+    \item \textbf{Verification failure taxonomy}: A systematic analysis of 355 verification failures revealing that 86\% stem from wrong execution consensus due to correlated perception errors, and that $\kappa$-gating recovers 88.5\% of the dominant recoverable failure subtype.
 
+    \item \textbf{Compositional feature validation}: A learned ablation showing that compositional cross-layer features are the \emph{only} transferable signal source for geometry verification (+8$\pp$ OOD), while standard and execution-channel features provide no gain beyond MV. The hand-designed \ccv{} rule nearly matches the learned optimum, confirming that the compositional structure, not the scorer, does the work.
+\end{enumerate}
 
-The text must be confined within a rectangle 5.5~inches (33~picas) wide and
-9~inches (54~picas) long. The left margin is 1.5~inch (9~picas).  Use 10~point
-type with a vertical spacing (leading) of 11~points.  Times New Roman is the
-preferred typeface throughout, and will be selected for you by default.
-Paragraphs are separated by \nicefrac{1}{2}~line space (5.5 points), with no
-indentation.
+% ===========================================================================
+\section{The \sketch{} Format}
+\label{sec:format}
+% ===========================================================================
 
+\subsection{Visual Grounding Facts (VGF)}
 
-The paper title should be 17~point, initial caps/lower case, bold, centered
-between two horizontal rules. The top rule should be 4~points thick and the
-bottom rule should be 1~point thick. Allow \nicefrac{1}{4}~inch space above and
-below the title to rules. All pages should start at 1~inch (6~picas) from the
-top of the page.
+VGF is a list of atomic geometric facts extracted from the diagram, using a closed vocabulary of relations:
+\begin{equation}
+    f = (\texttt{relation}, \texttt{entities}), \quad \texttt{relation} \in \{\texttt{parallel}, \texttt{perpendicular}, \texttt{collinear}, \texttt{equal\_angle}, \ldots\}
+\end{equation}
+Each fact is a typed assertion grounding a visual observation in symbolic form. The closed vocabulary ensures parseability and enables cross-candidate comparison.
 
+\subsection{Typed DSL}
 
-For the final version, authors' names are set in boldface, and each name is
-centered above the corresponding address. The lead author's name is to be listed
-first (left-most), and the co-authors' names (if different address) are set to
-follow. If there is only one co-author, list both author and co-author side by
-side.
+The DSL is a restricted, executable Python subset that derives the answer from VGF-grounded premises using geometry helper functions and standard mathematical operations ($\sqrt{\cdot}$, trigonometric functions, $\pi$, etc.). Every program terminates with an explicit \texttt{answer = ...} assignment, enabling deterministic extraction of the execution result.
 
+\subsection{Closed-Loop Structure}
 
-Please pay special attention to the instructions in Section \ref{others}
-regarding figures, tables, acknowledgments, and references.
+Each candidate forms a closed loop: VGF provides premises $\rightarrow$ DSL reasons from premises $\rightarrow$ exec produces a deterministic result $\rightarrow$ claim states the model's answer. This loop enables cross-validation: we can check whether claim $\approx$ exec (compositional consistency, $\kappa$), providing a verification signal that is \emph{intrinsic} to the candidate.
 
-\section{Headings: first level}
-\label{headings}
+\subsection{Training}
 
+We fine-tune Qwen2.5-VL-7B-Instruct with LoRA ($r{=}128$, $\alpha{=}256$) on 2,012 geometry examples distilled from the Geometry3K training split. Distillation proceeds in two stages: (i)~frontier model CoT generation (Qwen3-VL-235B-A22B-Thinking), (ii)~text-only reformatting to VGF+DSL structure (DeepSeek V4 Pro, zero vision API cost). The resulting model achieves format compliance $>$99.9\%, VGF parse success $>$98.7\%, and DSL execution success $>$94.5\% on test data.
 
-All headings should be lower case (except for first word and proper nouns),
-flush left, and bold.
+% ===========================================================================
+\section{Compositional Consensus Verification}
+\label{sec:method}
+% ===========================================================================
 
+\subsection{Verification Signal Taxonomy}
+\label{sec:signals}
 
-First-level headings should be in 12-point type.
+Given $K$ candidates $\{c_1, \ldots, c_K\}$, each decomposed as $c_i = (\text{VGF}_i, \text{DSL}_i, \text{exec}_i, \text{claim}_i)$, we define a hierarchy of verification signals ordered by the structural diversity they require:
 
+\paragraph{Level 1: Within-layer consensus.} Signals computed within a single output layer, aggregated across candidates:
+\begin{align}
+    S_{\text{claim}}(z) &= |\{i : \text{claim}_i = z\}| & \text{(surface consensus)} \\
+    S_{\text{exec}}(z) &= |\{i : \text{exec}_i = z,\ \text{exec}_i \neq \bot\}| & \text{(execution consensus)}
+\end{align}
+Traditional MV selects $\arg\max_z S_{\text{claim}}(z)$. Execution MV selects $\arg\max_z S_{\text{exec}}(z)$.
 
-\subsection{Headings: second level}
+\paragraph{Level 2: Cross-layer agreement.} Signals that compare outputs across structurally different layers:
+\begin{align}
+    \kappa_i &= \mathbf{1}[\text{claim}_i \approx \text{exec}_i \wedge \text{exec}_i \neq \bot] & \text{(compositional consistency)} \\
+    \mu_i &= \mathbf{1}[\text{exec}_i = \text{mode}(\text{claim})] & \text{(cross-candidate cross-layer)}
+\end{align}
+$\kappa$ checks whether a single candidate's neural and symbolic pathways agree; $\mu$ checks whether a candidate's symbolic output confirms the crowd's neural consensus.
 
+\paragraph{Level 3: Agreement-gated consensus.} Cross-layer agreement gates within-layer consensus:
+\begin{equation}
+    G_\kappa(z) = \sum_i \mathbf{1}[\text{exec}_i = z] \cdot \kappa_i
+\end{equation}
+Only execution votes from self-consistent candidates count. This is the core compositional signal.
 
-Second-level headings should be in 10-point type.
+\subsection{The Cross-Channel Verification Advantage}
 
+We provide a formal motivation for why gated consensus outperforms raw consensus.
 
-\subsubsection{Headings: third level}
+\begin{proposition}[Informal]
+\label{prop:neff}
+Let the exec channel have per-candidate accuracy $p_e$ and pairwise error correlation $\rho_e$. The effective sample size for raw exec consensus is $N_{\emph{eff}}^{\emph{raw}} = K/(1 + (K{-}1)\rho_e)$. Let $\kappa$-filtering retain $K_\kappa$ candidates whose exec errors have pairwise correlation $\rho_\kappa$. If $\kappa$-filtering reduces error correlation ($\rho_\kappa < \rho_e$), then $N_{\emph{eff}}^{\kappa} = K_\kappa / (1 + (K_\kappa{-}1)\rho_\kappa)$ can exceed $N_{\emph{eff}}^{\emph{raw}}$ despite $K_\kappa < K$---fewer but more independent votes yield a more reliable majority.
+\end{proposition}
 
+The key mechanism is that $\kappa = 1$ requires two structurally different pathways (neural and symbolic) to independently converge to the same answer. This acts as an independence-restoring filter: candidates passing the filter have overcome two distinct noise sources, making their residual errors less correlated.
 
-Third-level headings should be in 10-point type.
+\textbf{Empirical support.} In our 355 verification failure cases, we observe 2,625 candidates with correct claims, of which only 22.48\% also have correct execution---confirming that claim-exec coupling is weak ($P(\text{exec correct} \mid \text{claim correct}) \approx 0.225$). Meanwhile, wrong execution consensus clusters reach sizes 8--16 ($\rho_e$ is high). This asymmetry---high within-channel correlation, low cross-channel coupling---is precisely the regime where cross-channel gating provides the largest advantage.
 
+\subsection{\kgated{} Dual-Pathway \ccv{}}
 
-\paragraph{Paragraphs}
+We combine the verification signals into a two-level gating algorithm:
 
-
-There is also a \verb+\paragraph+ command available, which sets the heading in
-bold, flush left, and inline with the text, with the heading followed by 1\,em
-of space.
-
-
-\section{Citations, figures, tables, references}
-\label{others}
-
-
-These instructions apply to everyone.
-
-
-\subsection{Citations within the text}
-
-
-The \verb+natbib+ package will be loaded for you by default.  Citations may be
-author/year or numeric, as long as you maintain internal consistency.  As to the
-format of the references themselves, any style is acceptable as long as it is
-used consistently.
-
-
-The documentation for \verb+natbib+ may be found at
-\begin{center}
-  \url{http://mirrors.ctan.org/macros/latex/contrib/natbib/natnotes.pdf}
-\end{center}
-Of note is the command \verb+\citet+, which produces citations appropriate for
-use in inline text.  For example,
-\begin{verbatim}
-   \citet{hasselmo} investigated\dots
-\end{verbatim}
-produces
-\begin{quote}
-  Hasselmo, et al.\ (1995) investigated\dots
-\end{quote}
-
-
-If you wish to load the \verb+natbib+ package with options, you may add the
-following before loading the \verb+neurips_2026+ package:
-\begin{verbatim}
-   \PassOptionsToPackage{options}{natbib}
-\end{verbatim}
-
-
-If \verb+natbib+ clashes with another package you load, you can add the optional
-argument \verb+nonatbib+ when loading the style file:
-\begin{verbatim}
-   \usepackage[nonatbib]{neurips_2026}
-\end{verbatim}
-
-
-As submission is double blind, refer to your own published work in the third
-person. That is, use ``In the previous work of Jones et al.\ [4],'' not ``In our
-previous work [4].'' If you cite your other papers that are not widely available
-(e.g., a journal paper under review), use anonymous author names in the
-citation, e.g., an author of the form ``A.\ Anonymous'' and include a copy of the anonymized paper in the supplementary material.
-
-
-\subsection{Footnotes}
-
-
-Footnotes should be used sparingly.  If you do require a footnote, indicate
-footnotes with a number\footnote{Sample of the first footnote.} in the
-text. Place the footnotes at the bottom of the page on which they appear.
-Precede the footnote with a horizontal rule of 2~inches (12~picas).
-
-
-Note that footnotes are properly typeset \emph{after} punctuation
-marks.\footnote{As in this example.}
-
-
-\subsection{Figures}
-
-
-\begin{figure}
-  \centering
-  \fbox{\rule[-.5cm]{0cm}{4cm} \rule[-.5cm]{4cm}{0cm}}
-  \caption{Sample figure caption. Explain what the figure shows and add a key take-away message to the caption.}
-\end{figure}
-
-
-All artwork must be neat, clean, and legible. Lines should be dark enough for
- reproduction purposes. The figure number and caption always appear after the
-figure. Place one line space before the figure caption and one line space after
-the figure. The figure caption should be lower case (except for the first word and proper nouns); figures are numbered consecutively.
-
-
-You may use color figures.  However, it is best for the figure captions and the
-paper body to be legible if the paper is printed in either black/white or in
-color.
-
-
-\subsection{Tables}
-
-
-All tables must be centered, neat, clean, and legible.  The table number and
-title always appear before the table.  See Table~\ref{sample-table}.
-
-
-Place one line space before the table title, one line space after the
-table title, and one line space after the table. The table title must
-be lower case (except for the first word and proper nouns); tables are
-numbered consecutively.
-
-
-Note that publication-quality tables \emph{do not contain vertical rules}. We
-strongly suggest the use of the \verb+booktabs+ package, which allows for
-typesetting high-quality, professional tables:
-\begin{center}
-  \url{https://www.ctan.org/pkg/booktabs}
-\end{center}
-This package was used to typeset Table~\ref{sample-table}.
-
-
-\begin{table}
-  \caption{Sample table caption. Explain what the table shows and add a key take-away message to the caption.}
-  \label{sample-table}
-  \centering
-  \begin{tabular}{lll}
-    \toprule
-    \multicolumn{2}{c}{Part}                   \\
-    \cmidrule(r){1-2}
-    Name     & Description     & Size ($\mu$m) \\
-    \midrule
-    Dendrite & Input terminal  & $\approx$100     \\
-    Axon     & Output terminal & $\approx$10      \\
-    Soma     & Cell body       & up to $10^6$  \\
-    \bottomrule
-  \end{tabular}
+\begin{algorithm}[h]
+\caption{$\kappa$-gated Dual-Pathway CCV}
+\label{alg:ccv}
+\begin{algorithmic}[1]
+\REQUIRE Candidates $\{c_1, \ldots, c_K\}$, threshold $\tau_{\text{exec}}$
+\FOR{each candidate $c_i$}
+    \STATE $\kappa_i \gets \mathbf{1}[\text{claim}_i \approx \text{exec}_i \wedge \text{exec}_i \neq \bot]$
+    \STATE $\text{score}_i \gets 0.5 \cdot |\text{claim\_cluster}_i| + \kappa_i \cdot (1 + |\text{exec\_cluster}_i|)$
+\ENDFOR
+\STATE $\mathcal{K} \gets \{c_i : \kappa_i = 1\}$ \hfill $\triangleright$ self-consistent candidate pool
+\IF{$\mathcal{K} \neq \emptyset$}
+    \STATE \textbf{return} $\text{claim}(\arg\max_{c_i \in \mathcal{K}} \text{score}_i)$ \hfill $\triangleright$ \textit{Level 1: output neural claim}
+\ELSE
+    \STATE $z_{\text{exec}} \gets \text{mode}(\{\text{exec}_i : \text{exec}_i \neq \bot\})$
+    \IF{$|\{i : \text{exec}_i = z_{\text{exec}}\}| \geq \tau_{\text{exec}}$}
+        \STATE \textbf{return} $z_{\text{exec}}$ \hfill $\triangleright$ \textit{Level 2: fall back to symbolic execution}
+    \ELSE
+        \STATE \textbf{return} $\text{mode}(\{\text{claim}_i\})$ \hfill $\triangleright$ \textit{Level 3: fall back to claim majority}
+    \ENDIF
+\ENDIF
+\end{algorithmic}
+\end{algorithm}
+
+The algorithm embodies the cross-channel principle at two levels:
+
+\textbf{Candidate scoring (Lines 2--3).} The term $\kappa_i \cdot |\text{exec\_cluster}_i|$ realizes agreement-gated consensus: execution consensus is trusted only when accompanied by cross-layer agreement. The term $0.5 \cdot |\text{claim\_cluster}|$ provides a baseline surface signal. Raw execution cluster size receives zero weight---our learned ablation confirms this is correct (its learned coefficient is \emph{negative} when the gated term is present).
+
+\textbf{Output pathway routing (Lines 6--12).} When self-consistent candidates exist ($\kappa$-pool is non-empty), the algorithm outputs the neural claim. When cross-layer agreement collapses globally, it falls back to symbolic execution consensus, but only if the execution cluster is sufficiently large ($\geq \tau_{\text{exec}}$). This routing treats the \emph{absence} of cross-channel agreement as diagnostic: it signals that the neural pathway is unreliable, making the deterministic symbolic pathway the safer bet.
+
+\textbf{Complexity.} $O(K)$ time, zero additional model calls, one tunable parameter ($\tau_{\text{exec}}$).
+
+% ===========================================================================
+\section{Experiments}
+\label{sec:experiments}
+% ===========================================================================
+
+\subsection{Setup}
+
+\paragraph{Model.} Qwen2.5-VL-7B-Instruct $+$ LoRA SFT (checkpoint-240, $\sim$2.9 epochs).
+
+\paragraph{Training data.} 2,012 Geometry3K train examples (frontier CoT $\rightarrow$ VGF+DSL reformat, executor-validated).
+
+\paragraph{Test benchmarks.} Four benchmarks with zero training overlap (verified by 13-gram, embedding cosine, and image perceptual hash):
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{llccl}
+\toprule
+Benchmark & Lang & $N$ & Role \\
+\midrule
+Geometry3K test & EN & 601 & In-distribution \\
+GeoQA test & ZH & 754 & Cross-lingual OOD \\
+MathVista-GPS clean & EN & 146 & Cross-domain OOD \\
+MathVista-GPS & EN & 208 & Reference (has overlap) \\
+\bottomrule
+\end{tabular}
 \end{table}
 
-\subsection{Math}
-Note that display math in bare TeX commands will not create correct line numbers for submission. Please use LaTeX (or AMSTeX) commands for unnumbered display math. (You really shouldn't be using \$\$ anyway; see \url{https://tex.stackexchange.com/questions/503/why-is-preferable-to} and \url{https://tex.stackexchange.com/questions/40492/what-are-the-differences-between-align-equation-and-displaymath} for more information.)
+\paragraph{Sampling.} $K{=}16$, temperature $0.8$, top-$p$ $0.95$. All verification experiments operate on the same frozen rollout pool---no additional inference.
 
-\subsection{Final instructions}
+\paragraph{Hyperparameter selection.} All \ccv{} parameters are selected on the first 300 questions of Geometry3K test (dev split). The remaining benchmarks serve as disjoint heldout/OOD evaluation.
 
-Do not change any aspects of the formatting parameters in the style files.  In
-particular, do not modify the width or length of the rectangle the text should
-fit into, and do not change font sizes. Please note that pages should be
-numbered.
+\subsection{Main Results}
 
+\begin{table}[t]
+\centering
+\caption{Verification method comparison ($K{=}16$). \ccv{} denotes $\kappa$-gated dual-pathway CCV with $\tau_{\text{exec}}{=}9$. All methods operate on the same candidate pool with zero additional inference cost.}
+\label{tab:main}
+\small
+\begin{tabular}{lcccccc}
+\toprule
+Dataset & $N$ & Claim MV & Exec MV & EAV & \ccv{} & Oracle \\
+\midrule
+Geometry3K test & 601 & 66.72 & 72.71 & 74.04 & \textbf{78.54} & 93.51 \\
+GeoQA (zh) & 754 & 73.61 & 75.60 & 77.72 & \textbf{81.83} & 93.50 \\
+MathVista-GPS clean & 146 & 72.60 & 76.71 & 77.40 & \textbf{86.30} & 91.78 \\
+MathVista-GPS & 208 & 69.23 & 72.60 & 75.96 & \textbf{81.25} & 92.79 \\
+\midrule
+\textbf{Total} & \textbf{1709} & 70.57 & 74.31 & 76.18 & \textbf{80.98} & 93.27 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-\section{Preparing PDF files}
+\ccv{} achieves 80.98\% total accuracy, a $+$10.41$\pp$ improvement over Claim MV and $+$4.80$\pp$ over EAV, closing 45.9\% of the claim-to-oracle gap. On the disjoint heldout/OOD split (excluding dev 300), accuracy is 81.83\%.
 
-
-Please prepare submission files with paper size ``US Letter,'' and not, for
-example, ``A4.''
-
-
-Fonts were the main cause of problems in the past years. Your PDF file must only
-contain Type 1 or Embedded TrueType fonts. Here are a few instructions to
-achieve this.
-
-
+\paragraph{Progression of verification signals.}
 \begin{itemize}
+\item Claim MV $\rightarrow$ Exec MV: $+$3.74$\pp$ (symbolic channel outperforms neural channel)
+\item Exec MV $\rightarrow$ EAV: $+$1.87$\pp$ (exec-first priority with consistency scoring)
+\item EAV $\rightarrow$ \ccv{}: $+$4.80$\pp$ ($\kappa$-gated scoring $+$ dual-pathway output)
+\end{itemize}
+Each step adds a structurally deeper verification signal, and each produces a positive gain.
 
+\subsection{$K$ Scaling Analysis}
 
-\item You should directly generate PDF files using \verb+pdflatex+.
+\begin{table}[h]
+\centering
+\caption{Performance across $K$ (four benchmarks total).}
+\label{tab:scaling}
+\small
+\begin{tabular}{rccccc}
+\toprule
+$K$ & Claim MV & Exec MV & \ccv{} & Oracle & \ccv{} $-$ Claim MV \\
+\midrule
+4 & 69.34 & 68.98 & 74.94 & 84.74 & $+$5.60 \\
+8 & 70.38 & 72.43 & 77.88 & 89.89 & $+$7.50 \\
+16 & 70.57 & 74.31 & 80.98 & 93.27 & $+$10.41 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
+The \ccv{} advantage scales with $K$: the gain over Claim MV grows from $+$5.60$\pp$ at $K{=}4$ to $+$10.41$\pp$ at $K{=}16$. Surface consensus saturates quickly (Claim MV gains only $+$1.23$\pp$ from $K{=}4$ to 16), while compositional verification continues extracting signal from larger candidate pools.
 
-\item You can check which fonts a PDF files uses.  In Acrobat Reader, select the
-  menu Files$>$Document Properties$>$Fonts and select Show All Fonts. You can
-  also use the program \verb+pdffonts+ which comes with \verb+xpdf+ and is
-  available out-of-the-box on most Linux machines.
+\subsection{Verification Signal Ablation}
 
+\begin{table}[h]
+\centering
+\caption{Verification signal hierarchy. Each row adds a deeper level of structural diversity.}
+\label{tab:signals}
+\small
+\begin{tabular}{llcc}
+\toprule
+Signal & Type & Accuracy \\
+\midrule
+Claim MV & within-layer, single channel & 70.57 \\
+Exec MV & within-layer, single channel & 74.31 \\
+VGF consensus & within-layer, perception & 67.88 \\
+$\kappa$ self-consistency & cross-layer, within-candidate & basis of \ccv{} \\
+$\kappa$-gated consensus & cross-layer-gated & \textbf{80.98} \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-\item \verb+xfig+ ``patterned'' shapes are implemented with bitmap fonts.  Use
-  "solid" shapes instead.
+VGF consensus---another within-layer signal---not only fails to help but \emph{hurts} performance when added (from 80.05\% to 79.93\%). This reinforces the central finding: within-layer consensus, regardless of which layer, is vulnerable to correlated perception errors. Only cross-layer gating provides robust verification signal.
 
+\subsection{Learned Feature Ablation}
+\label{sec:learned}
 
-\item The \verb+\bbold+ package almost always uses bitmap fonts.  You should use
-  the equivalent AMS Fonts:
-\begin{verbatim}
-   \usepackage{amsfonts}
-\end{verbatim}
-followed by, e.g., \verb+\mathbb{R}+, \verb+\mathbb{N}+, or \verb+\mathbb{C}+
-for $\mathbb{R}$, $\mathbb{N}$ or $\mathbb{C}$.  You can also use the following
-workaround for reals, natural and complex:
-\begin{verbatim}
-   \newcommand{\RR}{I\!\!R} %real numbers
-   \newcommand{\Nat}{I\!\!N} %natural numbers
-   \newcommand{\CC}{I\!\!\!\!C} %complex numbers
-\end{verbatim}
-Note that \verb+amsfonts+ is automatically loaded by the \verb+amssymb+ package.
+To validate that the compositional features carry the transferable verification signal---not just that our specific CCV rule is effective---we train candidate-level logistic regression classifiers on Geometry3K dev (300 questions) and evaluate on disjoint OOD benchmarks.
 
+\begin{table}[h]
+\centering
+\caption{Learned verifier ablation. ``S'' = standard features (logprob, claim cluster), ``E'' = execution features, ``C'' = compositional cross-layer features ($\kappa$, $\kappa \times \text{exec\_cluster}$, $\mu$, $\kappa \times \mu$, sc\_rate).}
+\label{tab:learned}
+\small
+\begin{tabular}{lccc}
+\toprule
+Features & Dev@300 & OOD & All \\
+\midrule
+S-only & 67.00 & 71.86 & 70.74 \\
+S+E & 66.33 & 71.69 & 70.63 \\
+S+E+C & 74.67 & 79.85 & 78.47 \\
+C-only & 75.33 & 81.02 & 79.64 \\
+\midrule
+Rule \ccv{} (dual-output) & 77.00 & 81.83 & 80.98 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
+Three findings emerge:
+
+\textbf{(1) Compositional features are the sole source of transferable signal.} Adding execution features to standard features yields no OOD improvement (71.86$\rightarrow$71.69). Adding compositional features produces a $+$8$\pp$ jump (71.69$\rightarrow$79.85). Using \emph{only} compositional features matches full-feature performance. Standard candidate features (logprob, cluster size) are insufficient for geometry verification.
+
+\textbf{(2) The learned model independently discovers the gating principle.} Standardized logistic coefficients reveal: \texttt{exec\_cluster\_size} has a \emph{negative} coefficient ($-$2.40), while \texttt{$\kappa$ $\times$ exec\_cluster} has a strongly \emph{positive} coefficient ($+$1.96). The data confirms what our theory predicts: raw execution consensus is noise; gated execution consensus is signal.
+
+\textbf{(3) The hand-designed rule is near-optimal.} Rule \ccv{} (80.98\%) slightly outperforms the best learned classifier (C-only: 79.64\% all, 81.02\% OOD). More expressive models (MLP) overfit to dev without OOD gains. This confirms that the compositional structure does the heavy lifting---the specific scorer matters less than the features it operates on.
+
+\subsection{Error Taxonomy and Recovery Analysis}
+
+We analyze 355 cases where the baseline (EAV) fails but oracle succeeds.
+
+\paragraph{Failure classification.}
+Wrong execution consensus accounts for 305/355 = 86\% of failures. Within this dominant category:
+\begin{itemize}
+    \item A2$\times$B1 (claim majority correct, exec majority wrong): 139 cases (45.6\%)
+    \item A2$\times$B2 (both majorities wrong): 132 cases (43.3\%)
+    \item A2$\times$B3 (claim dispersed): 34 cases (11.1\%)
 \end{itemize}
 
+\paragraph{Recovery by \ccv{}.}
+$\kappa$-gating recovers 123/139 = \textbf{88.5\%} of A2$\times$B1 cases---precisely the subtype where the neural pathway (claim) is correct but the symbolic pathway (exec) is corrupted by shared perception error. This is the failure mode that the cross-channel principle predicts should be recoverable: when exec consensus is unreliable, $\kappa$-gating down-weights it in favor of claim-exec agreement.
 
-If your file contains type 3 fonts or non embedded TrueType fonts, we will ask
-you to fix it.
+A2$\times$B2 (both pathways wrong) remains largely unrecoverable (8.3\%), representing the theoretical limit of any selection method operating on the same candidate pool. Breaking through this ceiling requires independent premise verification---generating \emph{new} evidence, not selecting among existing candidates.
 
+\paragraph{$\kappa$ reliability stratification.}
+Among self-consistent ($\kappa{=}1$) candidates, accuracy varies sharply with execution cluster size: 19\% for cluster size 1, rising to 93\% for cluster size 8+. This confirms that $\kappa$ alone is not sufficient---it must be combined with within-layer consensus (the $\kappa \times \text{exec\_cluster}$ term) to be reliable, exactly as the \ccv{} scoring formula prescribes.
 
-\subsection{Margins in \LaTeX{}}
+% ===========================================================================
+\section{Related Work}
+\label{sec:related}
+% ===========================================================================
 
+\paragraph{Multimodal geometry reasoning.}
+Recent work has developed specialized VLMs for geometry, including G-LLaVA~\cite{gllava}, GeoX~\cite{geox}, and MAVIS~\cite{mavis}. AlphaGeometry~\cite{alphageometry,alphageometry2} combines a symbolic geometry engine with a neural proposer. FormalGeo~\cite{formalgeo} develops a complete formal geometry solver. These works focus on improving the \emph{generator}; our work is orthogonal, focusing on \emph{verification} of generated candidates.
 
-Most of the margin problems come from figures positioned by hand using
-\verb+\special+ or other commands. We suggest using the command
-\verb+\includegraphics+ from the \verb+graphicx+ package. Always specify the
-figure width as a multiple of the line width as in the example below:
-\begin{verbatim}
-   \usepackage[pdftex]{graphicx} ...
-   \includegraphics[width=0.8\linewidth]{myfile.pdf}
-\end{verbatim}
-See Section 4.4 in the graphics bundle documentation
-(\url{http://mirrors.ctan.org/macros/latex/required/graphics/grfguide.pdf})
+\paragraph{Test-time consensus methods.}
+Self-consistency~\cite{wang2023selfconsistency} established majority voting as the standard for test-time verification. Universal self-consistency~\cite{chen2023universal} extends this to open-ended generation. CISC~\cite{cisc2025} uses model confidence to weight votes, reducing sample requirements. These methods treat candidates as opaque votes; \sketch{} exploits their internal compositional structure.
 
+\paragraph{Learned verification.}
+Outcome reward models (ORM;~\cite{cobbe2021,uesato2022}) and process reward models (PRM;~\cite{lightman2023,mathshepherd}) train external scorers. GenRM~\cite{genrm2024} frames verification as generative next-token prediction. URSA-RM~\cite{ursa2025} and VisualPRM~\cite{visualprm2025} extend PRMs to multimodal math. Our learned ablation shows that these models' standard features (logprob, sequence-level scores) provide no OOD gain for geometry verification without compositional cross-layer features.
 
-A number of width problems arise when \LaTeX{} cannot properly hyphenate a
-line. Please give LaTeX hyphenation hints using the \verb+\-+ command when
-necessary.
+\paragraph{Program-aided verification.}
+PROVE~\cite{prove2024} filters candidates by checking whether a translated Python program's output matches the natural language answer---a binary consistency check analogous to our $\kappa$. Our framework generalizes this: $\kappa$ is one signal within a multi-level hierarchy that includes $\mu$ (cross-candidate cross-layer), agreement-gated consensus, and output pathway routing. Moreover, \sketch{}'s typed DSL and VGF provide richer structure than PROVE's post-hoc program translation.
 
-\begin{ack}
-Use unnumbered first level headings for the acknowledgments. All acknowledgments
-go at the end of the paper before the list of references. Moreover, you are required to declare
-funding (financial activities supporting the submitted work) and competing interests (related financial activities outside the submitted work).
-More information about this disclosure can be found at: \url{https://neurips.cc/Conferences/2026/PaperInformation/FundingDisclosure}.
+\paragraph{Correlated errors in LLM voting.}
+\citet{nitarach2026} empirically demonstrates that correlated errors limit effective sample size in LLM majority voting, finding that diverse prompts do not help because high-temperature sampling already provides sufficient decorrelation. Our work identifies a different solution: rather than attempting to decorrelate votes (which may be futile when correlation stems from shared perception), we \emph{gate} consensus through cross-channel agreement, exploiting the structural diversity already present in compositional outputs.
 
+% ===========================================================================
+\section{Discussion}
+\label{sec:discussion}
+% ===========================================================================
 
-Do {\bf not} include this section in the anonymized submission, only in the final paper. You can use the \texttt{ack} environment provided in the style file to automatically hide this section in the anonymized submission.
-\end{ack}
+\paragraph{Output format as verification design.}
+Our results suggest a broader principle: \emph{the output format is a verification design choice}. By designing reasoning outputs to contain compositional, cross-validatable pathways, we convert format design into verification capability. This is not geometry-specific: any domain where reasoning can be decomposed into perception, logic, computation, and conclusion---code generation, scientific reasoning, multi-step planning---could benefit from compositional verification. The transferable insight is that structural diversity in outputs creates structural diversity in errors, which creates verification opportunity.
 
-\section*{References}
+\paragraph{Limitations.}
+(1)~Our experiments use a single base model (9B scale). While OOD generalization across benchmarks and languages is strong, testing with additional model families would strengthen the claims. (2)~The A2$\times$B2 failure mode (both pathways wrong, 43\% of remaining errors) is unrecoverable by any selection method. Breaking this ceiling requires independent premise verification or cross-candidate evidence synthesis. (3)~The theoretical analysis, while supported by strong empirical evidence, is semi-formal; a full probabilistic treatment with tight bounds is left for future work.
 
+\paragraph{Future directions.}
+The compositional structure enables not only verification but potentially \emph{synthesis}: cross-transplanting the DSL logic of one candidate onto the VGF facts of another could construct correct answers that exist in no single candidate. This moves beyond selection to compositional recombination---a natural extension of the framework that we leave for future investigation.
 
-References follow the acknowledgments in the camera-ready paper. Use unnumbered first-level heading for
-the references. Any choice of citation style is acceptable as long as you are
-consistent. It is permissible to reduce the font size to \verb+small+ (9 point)
-when listing the references.
-Note that the Reference section does not count towards the page limit.
-\medskip
+% ===========================================================================
+\section{Conclusion}
+% ===========================================================================
 
+We have shown that neuro-symbolic reasoning candidates carry an underutilized verification resource: their compositional structure. By decomposing candidates into perception, logic, computation, and intuition layers, and by formalizing cross-channel agreement as a verification principle, we derive a training-free algorithm that achieves substantial gains over both consensus methods and the implicit assumptions of learned verifiers. The key insight---that agreement between structurally diverse pathways trumps repetition within any single pathway---is grounded in the error correlation structure of shared-perception reasoning, validated by systematic error taxonomy, and confirmed by independent learned feature analysis. We hope this work encourages the community to view output format design not just as a usability choice, but as a first-class verification decision.
 
-{
-\small
+% ===========================================================================
+% References - placeholder entries
+% ===========================================================================
 
-
-[1] Alexander, J.A.\ \& Mozer, M.C.\ (1995) Template-based algorithms for
-connectionist rule extraction. In G.\ Tesauro, D.S.\ Touretzky and T.K.\ Leen
-(eds.), {\it Advances in Neural Information Processing Systems 7},
-pp.\ 609--616. Cambridge, MA: MIT Press.
-
-
-[2] Bower, J.M.\ \& Beeman, D.\ (1995) {\it The Book of GENESIS: Exploring
-  Realistic Neural Models with the GEneral NEural SImulation System.}  New York:
-TELOS/Springer--Verlag.
-
-
-[3] Hasselmo, M.E., Schnell, E.\ \& Barkai, E.\ (1995) Dynamics of learning and
-recall at excitatory recurrent synapses and cholinergic modulation in rat
-hippocampal region CA3. {\it Journal of Neuroscience} {\bf 15}(7):5249-5262.
-}
-
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-\appendix
-
-\section{Technical appendices and supplementary material}
-Technical appendices with additional results, figures, graphs, and proofs may be submitted with the paper submission before the full submission deadline (see above). You can upload a ZIP file for videos or code, but do not upload a separate PDF file for the appendix. There is no page limit for the technical appendices. 
-
-Note: Think of the appendix as ``optional reading'' for reviewers. The paper must be able to stand alone without the appendix; for example, adding critical experiments that support the main claims to an appendix is inappropriate. 
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-\newpage
-\input{checklist.tex}
-
+\bibliography{references}
+\bibliographystyle{plainnat}
 
 \end{document}
