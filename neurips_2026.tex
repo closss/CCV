@@ -76,6 +76,7 @@
 \newtheorem{theorem}{Theorem}
 \newtheorem{lemma}{Lemma}
 \newtheorem{definition}{Definition}
+\newtheorem{corollary}{Corollary}
 
 \title{Compositional Consensus: \\ Verification through Structural Diversity \\ in Neuro-Symbolic Geometry Reasoning}
 
@@ -173,7 +174,7 @@ Each candidate forms a closed loop: VGF provides premises $\rightarrow$ DSL reas
 
 \subsection{Training}
 
-We fine-tune Qwen2.5-VL-7B-Instruct with LoRA ($r{=}128$, $\alpha{=}256$) on 2,012 geometry examples distilled from the Geometry3K training split. Distillation proceeds in two stages: (i)~frontier model CoT generation (Qwen3-VL-235B-A22B-Thinking), (ii)~text-only reformatting to VGF+DSL structure (DeepSeek V4 Pro, zero vision API cost). The resulting model achieves format compliance $>$99.9\%, VGF parse success $>$98.7\%, and DSL execution success $>$94.5\% on test data.
+We fine-tune Qwen3.5-9B with LoRA ($r{=}128$, $\alpha{=}256$) on 2,012 geometry examples distilled from the Geometry3K training split. Distillation proceeds in two stages: (i)~frontier model CoT generation (Qwen3-VL-235B-A22B-Thinking), (ii)~text-only reformatting to VGF+DSL structure (DeepSeek V4 Pro, zero vision API cost). The resulting model achieves format compliance $>$99.9\%, VGF parse success $>$98.7\%, and DSL execution success $>$94.5\% on test data.
 
 % ===========================================================================
 \section{Compositional Consensus Verification}
@@ -207,16 +208,41 @@ Only execution votes from self-consistent candidates count. This is the core com
 
 \subsection{The Cross-Channel Verification Advantage}
 
-We provide a formal motivation for why gated consensus outperforms raw consensus.
+We provide a formal motivation for why gated consensus outperforms raw consensus. For notational simplicity, this subsection writes claim--exec agreement as equality; in implementation, $\kappa_i$ uses approximate numeric matching and excludes failed executions.
 
-\begin{proposition}[Informal]
-\label{prop:neff}
-Let the exec channel have per-candidate accuracy $p_e$ and pairwise error correlation $\rho_e$. The effective sample size for raw exec consensus is $N_{\emph{eff}}^{\emph{raw}} = K/(1 + (K{-}1)\rho_e)$. Let $\kappa$-filtering retain $K_\kappa$ candidates whose exec errors have pairwise correlation $\rho_\kappa$. If $\kappa$-filtering reduces error correlation ($\rho_\kappa < \rho_e$), then $N_{\emph{eff}}^{\kappa} = K_\kappa / (1 + (K_\kappa{-}1)\rho_\kappa)$ can exceed $N_{\emph{eff}}^{\emph{raw}}$ despite $K_\kappa < K$---fewer but more independent votes yield a more reliable majority.
-\end{proposition}
+\begin{theorem}[Cross-channel agreement as a precision filter]
+\label{thm:accuracy}
+Let $X_i$ be the claim answer and $Y_i$ the executed answer for candidate $i$, and let $z^*$ be the correct answer. Define $\kappa_i=\mathbf{1}[X_i=Y_i]$, $t_\kappa=P(X_i=Y_i=z^*)$, and $f_\kappa=P(X_i=Y_i\neq z^*)$. Then the accuracy of self-consistent candidates satisfies the identity
+\begin{equation}
+    p_\kappa \triangleq P(Y_i=z^* \mid \kappa_i=1) = \frac{t_\kappa}{t_\kappa+f_\kappa}.
+\end{equation}
+Under an idealized shared-perception model where the exec pathway depends on a latent visual state $V$, the claim pathway is conditionally independent of exec, and false agreement is dispersed across $M{-}1$ wrong answers, $t_\kappa=p_c p_e$ and $p_\kappa>p_e$ whenever $p_c>1/M$.
+\end{theorem}
 
-The key mechanism is that $\kappa = 1$ requires two structurally different pathways (neural and symbolic) to independently converge to the same answer. This acts as an independence-restoring filter: candidates passing the filter have overcome two distinct noise sources, making their residual errors less correlated.
+The theorem isolates the central mechanism: $\kappa$-gating is primarily a \emph{precision filter}. It does not require repeated votes in the same channel; it requires two structurally different pathways to converge to the same answer. When the answer space is large, as in numerical geometry, false self-consistency $f_\kappa$ is rare, so a retained vote has much higher precision than a raw execution vote.
 
-\textbf{Empirical support.} In our 355 verification failure cases, we observe 2,625 candidates with correct claims, of which only 22.48\% also have correct execution---confirming that claim-exec coupling is weak ($P(\text{exec correct} \mid \text{claim correct}) \approx 0.225$). Meanwhile, wrong execution consensus clusters reach sizes 8--16 ($\rho_e$ is high). This asymmetry---high within-channel correlation, low cross-channel coupling---is precisely the regime where cross-channel gating provides the largest advantage.
+\begin{theorem}[One-vs-rest SNR approximation]
+\label{thm:snr}
+Condition on a retained pool of size $K_\kappa$ and assume $p_e,p_\kappa>1/2$. In a one-vs-rest binary correctness approximation, majority reliability has signal-to-noise ratio
+\begin{equation}
+    \mathrm{SNR}(p,n,\rho)=\frac{p-\tfrac{1}{2}}{\sqrt{p(1-p)(1+(n-1)\rho)/n}},
+\end{equation}
+where $p$ is per-vote accuracy and $\rho$ is pairwise correctness correlation. The $\kappa$-filtered pool improves over raw exec voting whenever
+\begin{equation}
+    \frac{p_\kappa - \tfrac{1}{2}}{p_e - \tfrac{1}{2}}
+    >
+    \sqrt{
+    \frac{p_\kappa(1-p_\kappa)}{p_e(1-p_e)}
+    \cdot
+    \frac{K(1+(K_\kappa-1)\rho_\kappa)}{K_\kappa(1+(K-1)\rho_e)}
+    }.
+    \label{eq:snr_condition}
+\end{equation}
+\end{theorem}
+
+Importantly, condition~\eqref{eq:snr_condition} can be satisfied even when $\rho_\kappa>\rho_e$: the accuracy boost from precision filtering can dominate the noise penalty from a smaller or more correlated retained pool. This gives a testable, counterintuitive prediction: $\kappa$-gating need not reduce correlation to improve majority reliability. This makes our story complementary to negative results on diverse prompting~\cite{nitarach2026}: when errors arise from shared perception, trying to decorrelate samples may be the wrong lever; gating consensus through cross-channel agreement targets precision directly.
+
+\textbf{Empirical support.} We directly measure within-question correctness correlations on the full dataset (1,709 questions $\times$ 16 candidates). Raw exec votes have pairwise correlation $\rho_e=0.526$; $\kappa$-filtered votes have higher correlation $\rho_\kappa=0.646$. Yet per-candidate accuracy jumps from 61.7\% to 87.1\%, and the one-vs-rest SNR proxy improves by $4.1\times$ (0.32 to 1.33). Thus the retained pool is more correlated, but substantially more reliable. This confirms that the dominant mechanism is precision filtering, not decorrelation: the $\kappa_i\cdot|\text{exec\_cluster}_i|$ term in Algorithm~\ref{alg:ccv} counts consensus only after it has survived cross-channel agreement.
 
 \subsection{\kgated{} Dual-Pathway \ccv{}}
 
@@ -260,7 +286,7 @@ The algorithm embodies the cross-channel principle at two levels:
 
 \subsection{Setup}
 
-\paragraph{Model.} Qwen2.5-VL-7B-Instruct $+$ LoRA SFT (checkpoint-240, $\sim$2.9 epochs).
+\paragraph{Model.} Qwen3.5-9B $+$ LoRA SFT (checkpoint-240, $\sim$2.9 epochs).
 
 \paragraph{Training data.} 2,012 Geometry3K train examples (frontier CoT $\rightarrow$ VGF+DSL reformat, executor-validated).
 
@@ -428,7 +454,7 @@ Outcome reward models (ORM;~\cite{cobbe2021,uesato2022}) and process reward mode
 PROVE~\cite{prove2024} filters candidates by checking whether a translated Python program's output matches the natural language answer---a binary consistency check analogous to our $\kappa$. Our framework generalizes this: $\kappa$ is one signal within a multi-level hierarchy that includes $\mu$ (cross-candidate cross-layer), agreement-gated consensus, and output pathway routing. Moreover, \sketch{}'s typed DSL and VGF provide richer structure than PROVE's post-hoc program translation.
 
 \paragraph{Correlated errors in LLM voting.}
-\citet{nitarach2026} empirically demonstrates that correlated errors limit effective sample size in LLM majority voting, finding that diverse prompts do not help because high-temperature sampling already provides sufficient decorrelation. Our work identifies a different solution: rather than attempting to decorrelate votes (which may be futile when correlation stems from shared perception), we \emph{gate} consensus through cross-channel agreement, exploiting the structural diversity already present in compositional outputs.
+\citet{nitarach2026} empirically demonstrates that correlated errors limit effective sample size in LLM majority voting, finding that diverse prompts do not help because high-temperature sampling already provides sufficient decorrelation. Our work identifies a different solution: rather than attempting to decorrelate votes, we \emph{gate} consensus through cross-channel agreement. Empirically, our retained $\kappa$-filtered pool is more correlated than the raw exec pool, yet achieves higher SNR because the individual retained votes are much more precise.
 
 % ===========================================================================
 \section{Discussion}
@@ -456,5 +482,126 @@ We have shown that neuro-symbolic reasoning candidates carry an underutilized ve
 
 \bibliography{references}
 \bibliographystyle{plainnat}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\appendix
+
+\section{Proofs for the Cross-Channel Verification Analysis}
+\label{app:proofs}
+
+\subsection{Latent shared-perception model}
+
+We formalize the verification problem using answer-valued random variables. Let $X_i$ denote the claim answer and $Y_i$ the executed answer for candidate $i$, both taking values in an answer space $\mathcal{Z}$ with correct answer $z^*$. A latent visual state $V$ is shared across candidates. Conditional on $V$, the executed answers $Y_i$ are i.i.d. from $P_e(\cdot \mid V)$; the claim answers $X_i$ are i.i.d. from $P_c(\cdot)$, independent of $V$; and $X_i$ and $Y_i$ are conditionally independent given $V$. This is an idealized model: empirically, we only require false self-consistency to be sufficiently rare, not perfect independence.
+
+Define $p_e=P(Y_i=z^*)=\mathbb{E}_V[P_e(z^*\mid V)]$ and $p_c=P(X_i=z^*)=P_c(z^*)$. For execution correctness indicators $E_i=\mathbf{1}[Y_i=z^*]$, the within-channel execution correlation is
+\begin{equation}
+    \rho_e=\operatorname{Corr}(E_i,E_j)
+    =
+    \frac{\operatorname{Var}_V[P_e(z^*\mid V)]}{p_e(1-p_e)}.
+    \label{eq:rho_e}
+\end{equation}
+Indeed, for $i\neq j$,
+\begin{align}
+    \operatorname{Cov}(E_i,E_j)
+    &=\mathbb{E}_V[\mathbb{E}[E_iE_j\mid V]]-p_e^2 \\
+    &=\mathbb{E}_V[P_e(z^*\mid V)^2]-\mathbb{E}_V[P_e(z^*\mid V)]^2 \\
+    &=\operatorname{Var}_V[P_e(z^*\mid V)].
+\end{align}
+Thus shared perception creates positive within-channel correlation whenever execution accuracy varies with the visual state.
+
+\subsection{Proof of Theorem~\ref{thm:accuracy}}
+
+Let $\kappa_i=\mathbf{1}[X_i=Y_i]$. Decompose self-consistency into true and false agreement:
+\begin{align}
+    t_\kappa &= P(X_i=Y_i=z^*), \\
+    f_\kappa &= P(X_i=Y_i\neq z^*)=\sum_{z\neq z^*}P(X_i=z,Y_i=z).
+\end{align}
+Then
+\begin{equation}
+    P(\kappa_i=1)=t_\kappa+f_\kappa,
+\end{equation}
+and therefore
+\begin{equation}
+    P(Y_i=z^*\mid \kappa_i=1)
+    =
+    \frac{P(Y_i=z^*,\kappa_i=1)}{P(\kappa_i=1)}
+    =
+    \frac{t_\kappa}{t_\kappa+f_\kappa}.
+\end{equation}
+This identity does not require independence; it simply states that self-consistent candidates are correct when agreement is true rather than false.
+
+Under the latent shared-perception model,
+\begin{align}
+    t_\kappa
+    &=P(X_i=z^*,Y_i=z^*) \\
+    &=P_c(z^*)\,\mathbb{E}_V[P_e(z^*\mid V)] \\
+    &=p_cp_e.
+\end{align}
+If wrong answers are approximately dispersed uniformly over $M{-}1$ alternatives, then
+\begin{equation}
+    f_\kappa \approx \frac{(1-p_c)(1-p_e)}{M-1}.
+\end{equation}
+The condition $p_\kappa>p_e$ is equivalent to
+\begin{align}
+    \frac{p_cp_e}{p_cp_e+f_\kappa} &> p_e \\
+    p_c(1-p_e) &> f_\kappa.
+\end{align}
+Substituting the uniform-dispersion approximation yields
+\begin{equation}
+    p_c(1-p_e)>\frac{(1-p_c)(1-p_e)}{M-1}
+    \quad\Longleftrightarrow\quad
+    p_c>\frac{1}{M},
+\end{equation}
+for $p_e<1$; the $p_e=1$ case is trivial. Thus cross-channel agreement improves per-candidate precision whenever the claim pathway is better than random over the effective answer space.
+
+\subsection{Proof of Theorem~\ref{thm:snr}}
+
+Consider $n$ exchangeable binary correctness variables $B_1,\ldots,B_n$ with $P(B_i=1)=p$ and pairwise correlation $\rho$. The sample mean $\bar{B}=n^{-1}\sum_i B_i$ has variance
+\begin{equation}
+    \operatorname{Var}(\bar{B})
+    =
+    \frac{p(1-p)}{n}\left[1+(n-1)\rho\right].
+\end{equation}
+In a one-vs-rest approximation, majority reliability is monotone in
+\begin{equation}
+    \mathrm{SNR}(p,n,\rho)=\frac{p-\tfrac{1}{2}}{\sqrt{\operatorname{Var}(\bar{B})}}.
+\end{equation}
+Applying this expression to raw exec voting with $(p_e,K,\rho_e)$ and to a retained $\kappa$-filtered pool with $(p_\kappa,K_\kappa,\rho_\kappa)$, and conditioning on retained pool size $K_\kappa$, gives $\mathrm{SNR}_\kappa>\mathrm{SNR}_{\mathrm{raw}}$ iff
+\begin{equation}
+    \frac{p_\kappa-\tfrac{1}{2}}{p_e-\tfrac{1}{2}}
+    >
+    \sqrt{
+    \frac{p_\kappa(1-p_\kappa)}{p_e(1-p_e)}
+    \cdot
+    \frac{K(1+(K_\kappa-1)\rho_\kappa)}{K_\kappa(1+(K-1)\rho_e)}
+    },
+\end{equation}
+which is condition~\eqref{eq:snr_condition}.
+
+\begin{corollary}[Answer dispersion amplifies cross-channel advantage]
+\label{cor:dispersion}
+Under the uniform-dispersion approximation, as the effective answer space $M$ grows, $f_\kappa\rightarrow 0$ and hence $p_\kappa\rightarrow 1$. If the retained pool remains nonempty and the correlation factor remains bounded, then $\mathrm{SNR}_\kappa\rightarrow\infty$ while raw exec SNR is unchanged.
+\end{corollary}
+
+\subsection{Numerical illustration}
+\label{app:numerical}
+
+We instantiate the SNR proxy using measured post-hoc statistics from the full dataset. Failed executions are counted as incorrect; correlations are Pearson correlations over ordered within-question candidate pairs. Raw exec voting uses $K=16$, $p_e=0.617$, and $\rho_e=0.526$. The retained pool has mean size $K_\kappa=9.09$, $p_\kappa=0.871$, and $\rho_\kappa=0.646$.
+\begin{center}
+\begin{tabular}{lcccc}
+\toprule
+Method & $n$ & $p$ & $\rho$ & SNR \\
+\midrule
+Raw exec MV & 16 & 0.617 & 0.526 & 0.32 \\
+$\kappa$-filtered MV & 9.09 & 0.871 & 0.646 & 1.33 \\
+\bottomrule
+\end{tabular}
+\end{center}
+The retained pool is therefore 23\% more correlated, but the SNR proxy improves by $4.1\times$. This empirical regime is exactly the counterintuitive case captured by Theorem~\ref{thm:snr}: precision filtering dominates the correlation penalty. The observed false self-consistency rate is 12.9\%, so most $\kappa{=}1$ candidates correspond to true rather than accidental agreement.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% TODO(NeurIPS checklist): before submission, complete checklist.tex and insert
+% \newpage\input{checklist.tex} after the optional appendix, per the official
+% template order: references, optional technical appendices, then checklist.
 
 \end{document}
