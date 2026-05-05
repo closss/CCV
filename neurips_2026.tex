@@ -253,6 +253,13 @@ Importantly, condition~\eqref{eq:snr_condition} can be satisfied even when $\rho
 
 \textbf{Empirical support.} We directly measure within-question correctness correlations on the full dataset (1,709 questions $\times$ 16 candidates). Raw exec votes have pairwise correlation $\rho_e=0.526$; $\kappa$-filtered votes have higher correlation $\rho_\kappa=0.646$. Yet per-candidate accuracy jumps from 61.7\% to 87.1\%, and the one-vs-rest SNR proxy improves by $4.1\times$ (0.32 to 1.33). Thus the retained pool is more correlated, but substantially more reliable. This confirms that the dominant mechanism is precision filtering, not decorrelation: the $\kappa_i\cdot|\text{exec\_cluster}_i|$ term in Algorithm~\ref{alg:ccv} counts consensus only after it has survived cross-channel agreement.
 
+\begin{figure}[t]
+    \centering
+    \input{figures/precision_filtering}
+    \caption{\textbf{Cross-channel precision filtering.} Left: $\kappa$-gating keeps candidates where claim and execution agree. True agreement occupies the claim-correct/exec-correct quadrant, while false agreement is dispersed across many wrong answers. Right: empirically, the $\kappa$-filtered pool is more correlated than raw execution votes, but its much higher precision yields a $4.1\times$ SNR improvement.}
+    \label{fig:precision-filtering}
+\end{figure}
+
 \subsection{\kgated{} Dual-Pathway \ccv{}}
 
 We combine the verification signals into a two-level gating algorithm:
@@ -321,6 +328,13 @@ MathVista-GPS & EN & 208 & Reference (has overlap) \\
 \paragraph{Hyperparameter selection.} All \ccv{} parameters are selected on the first 300 questions of Geometry3K test (dev split). The remaining benchmarks serve as disjoint heldout/OOD evaluation.
 
 \subsection{Main Results}
+
+\begin{figure}[t]
+    \centering
+    \input{figures/evidence_ladder}
+    \caption{\textbf{Evidence ladder.} Surface and confidence-based selectors cluster near 70--71\%, execution-only methods improve moderately, and cross-layer compositional verification produces the main jump to 79--81\%. Oracle is shown as a dashed upper bound.}
+    \label{fig:evidence-ladder}
+\end{figure}
 
 \begin{table*}[t]
 \centering

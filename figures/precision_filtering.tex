@@ -1,0 +1,89 @@
+\definecolor{pfGreen}{HTML}{4F9A5A}
+\definecolor{pfDarkGreen}{HTML}{1F6F3A}
+\definecolor{pfLightGreen}{HTML}{EFF8EF}
+\definecolor{pfRed}{HTML}{D96B63}
+\definecolor{pfLightRed}{HTML}{F8E6E4}
+\definecolor{pfGray}{HTML}{EEEEEE}
+\definecolor{pfPanel}{HTML}{F7F7F7}
+\definecolor{pfBluePanel}{HTML}{F3F8FD}
+
+\begin{tikzpicture}[
+  scale=0.94,
+  transform shape,
+  x=1cm,
+  y=1cm,
+  font=\sffamily,
+  panel/.style={rounded corners=6pt, draw=black!14, line width=0.55pt},
+  cell/.style={draw=white, line width=1.1pt, align=center, font=\sffamily\scriptsize},
+  smallcell/.style={draw=white, line width=0.55pt},
+  metric/.style={rounded corners=4pt, draw=black!18, line width=0.5pt, align=center, minimum height=0.62cm, font=\sffamily\scriptsize},
+  arrow/.style={-{Latex[length=2.0mm,width=1.45mm]}, draw=black!55, line width=0.6pt}
+]
+
+\node[anchor=west, font=\sffamily\bfseries\small] at (0.18,7.15) {Cross-channel precision filtering: why $\kappa$ improves reliability};
+\draw[panel, fill=pfLightGreen!45] (0.10,0.36) rectangle (7.08,6.82);
+\draw[panel, fill=pfBluePanel] (7.32,0.36) rectangle (14.40,6.82);
+
+\node[anchor=west, font=\sffamily\bfseries\scriptsize] at (0.38,6.48) {Precision filtering mechanism};
+\node[anchor=west, font=\sffamily\scriptsize, text=black!58] at (0.38,6.18) {Agreement retains true positives and rejects most mismatches.};
+
+\draw[fill=pfLightRed, draw=black!32, line width=0.7pt] (1.15,1.33) rectangle (3.55,3.35);
+\draw[fill=pfGray, draw=black!32, line width=0.7pt] (3.55,1.33) rectangle (5.95,3.35);
+\draw[fill=pfGray, draw=black!32, line width=0.7pt] (1.15,3.35) rectangle (3.55,5.37);
+\draw[fill=pfGreen!82, draw=black!32, line width=0.7pt] (3.55,3.35) rectangle (5.95,5.37);
+
+\foreach \i in {0,...,3} {
+  \foreach \j in {0,...,2} {
+    \pgfmathsetmacro{\xone}{1.28 + \i*0.48}
+    \pgfmathsetmacro{\yone}{1.50 + \j*0.42}
+    \draw[smallcell, fill=pfGray!82] (\xone,\yone) rectangle +(0.36,0.30);
+  }
+}
+\draw[smallcell, fill=pfRed!86, draw=pfRed!85!black, line width=0.7pt] (1.28,1.50) rectangle +(0.36,0.30);
+
+\node[cell, text width=2.0cm, text=black!68] at (2.35,4.36) {$\kappa=0$\\claim correct\\exec wrong};
+\node[cell, text width=2.0cm, text=black!68] at (4.75,2.34) {$\kappa=0$\\claim wrong\\exec correct};
+\node[cell, text width=1.95cm, text=white] at (4.75,4.36) {\textbf{True $\kappa=1$}\\$t_\kappa=p_c\cdot p_e$};
+\node[cell, text width=2.05cm, text=pfRed!80!black] at (2.35,2.78) {claim wrong\\exec wrong};
+\node[anchor=west, align=left, font=\sffamily\tiny, text=pfRed!85!black] at (1.72,1.64) {Fake $\kappa=1$\\$f_\kappa \approx \frac{(1-p_c)(1-p_e)}{M-1}$};
+
+\draw[->, draw=black!55, line width=0.65pt] (1.15,1.12) -- (5.95,1.12);
+\node[font=\sffamily\scriptsize, text=black!68] at (3.55,0.84) {Exec pathway};
+\node[font=\sffamily\tiny, text=black!55] at (1.50,0.84) {wrong};
+\node[font=\sffamily\tiny, text=black!55] at (5.55,0.84) {correct};
+\draw[->, draw=black!55, line width=0.65pt] (0.92,1.33) -- (0.92,5.37);
+\node[rotate=90, font=\sffamily\scriptsize, text=black!68] at (0.58,3.35) {Claim pathway};
+\node[rotate=90, font=\sffamily\tiny, text=black!55] at (0.58,1.75) {wrong};
+\node[rotate=90, font=\sffamily\tiny, text=black!55] at (0.58,5.00) {correct};
+
+\draw[arrow, draw=pfDarkGreen] (4.75,3.25) .. controls (5.55,2.50) and (5.78,1.88) .. (5.05,1.42);
+\node[align=center, font=\sffamily\tiny, text=pfDarkGreen] at (5.58,2.37) {true agreement\\dominates};
+
+\node[anchor=west, font=\sffamily\bfseries\scriptsize] at (7.62,6.48) {Empirical $\rho$ vs. SNR};
+\node[anchor=west, font=\sffamily\scriptsize, text=black!58] at (7.62,6.18) {Filtering raises precision even when retained votes are more correlated.};
+
+\draw[metric, fill=pfLightRed] (7.82,4.42) rectangle (10.55,5.42);
+\node[font=\sffamily\scriptsize\bfseries, text=black!78] at (9.18,5.12) {Raw exec pool};
+\node[font=\sffamily\scriptsize, text=black!70] at (9.18,4.78) {$\rho = 0.526$};
+\node[font=\sffamily\scriptsize, text=black!70] at (9.18,4.52) {SNR $=0.32$};
+
+\draw[metric, fill=pfLightGreen] (11.15,4.42) rectangle (13.88,5.42);
+\node[font=\sffamily\scriptsize\bfseries, text=pfDarkGreen] at (12.52,5.12) {$\kappa$-filtered pool};
+\node[font=\sffamily\scriptsize, text=black!70] at (12.52,4.78) {$\rho = 0.646$};
+\node[font=\sffamily\scriptsize, text=black!70] at (12.52,4.52) {SNR $=1.33$};
+
+\draw[arrow] (10.64,4.92) -- (11.06,4.92);
+\node[align=center, font=\sffamily\tiny, text=black!60] at (10.86,5.35) {$\rho\uparrow$ 23\%};
+
+\draw[rounded corners=4pt, draw=black!16, fill=white] (8.10,2.10) rectangle (13.55,3.62);
+\draw[fill=pfRed!78, draw=none] (8.55,2.48) rectangle (9.28,2.82);
+\draw[fill=pfGreen!82, draw=none] (8.55,3.05) rectangle (11.58,3.39);
+\node[anchor=west, font=\sffamily\scriptsize, text=black!70] at (9.42,2.65) {SNR $=0.32$};
+\node[anchor=west, font=\sffamily\scriptsize, text=black!70] at (11.72,3.22) {SNR $=1.33$};
+\draw[arrow, draw=pfDarkGreen] (9.72,2.78) -- (11.18,3.05);
+\node[font=\sffamily\scriptsize\bfseries, text=pfDarkGreen] at (10.70,2.62) {4.1$\times$};
+
+\node[align=center, font=\sffamily\scriptsize\bfseries, text=black!72] at (10.86,1.30) {More correlated, but far more reliable};
+\node[align=center, font=\sffamily\scriptsize, text=black!58] at (10.86,0.95) {precision dominates correlation};
+
+\end{tikzpicture}
