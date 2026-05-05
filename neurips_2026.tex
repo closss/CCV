@@ -92,7 +92,7 @@
 \begin{abstract}
 % ===========================================================================
 
-Test-time verification for reasoning tasks predominantly treats model outputs as opaque objects---either counting votes across candidates (consensus methods) or training external scorers to evaluate them (reward models). We observe that neuro-symbolic reasoning produces \emph{compositional} candidates whose internal structure can itself serve as a verification resource. We introduce \sketch{}, a framework for geometry reasoning that decomposes each candidate into a 4-tuple of Visual Grounding Facts, a typed DSL program, a deterministic execution result, and a natural-language claim. This compositional structure exposes two \emph{structurally diverse} reasoning pathways---neural (claim) and symbolic (execution)---whose errors are governed by different correlation regimes: symbolic errors are highly correlated across candidates due to shared visual perception, while neural errors are more dispersed. We formalize a \textbf{cross-channel verification principle}: agreement between structurally independent pathways provides stronger evidence than repeated consensus within any single pathway, because the former requires convergence across different noise sources while the latter can be inflated by shared errors. We instantiate this principle as \kgated{} dual-pathway Compositional Consensus Verification (\ccv{}), a training-free algorithm that uses cross-layer agreement ($\kappa$) to gate both candidate scoring and output pathway selection. Across four geometry benchmarks, \ccv{} achieves 80.98\% accuracy---a $+$10.41$\pp$ improvement over majority voting, closing 45.9\% of the gap to oracle performance---at zero additional inference cost. A systematic error taxonomy of 355 verification failures reveals that 86\% stem from correlated execution consensus, of which 88.5\% are recovered by $\kappa$-gating. A learned feature ablation further confirms that compositional cross-layer features are the sole source of transferable verification signal: adding them to a candidate-level classifier improves OOD accuracy by 8$\pp$, while standard and execution-only features provide no gain beyond majority voting.
+Test-time verification for reasoning tasks predominantly treats model outputs as opaque objects---either counting votes across candidates (consensus methods) or training external scorers to evaluate them (reward models). We observe that neuro-symbolic reasoning produces \emph{compositional} candidates whose internal structure can itself serve as a verification resource. We introduce \sketch{}, a framework for geometry reasoning that decomposes each candidate into a 4-tuple of Visual Grounding Facts, a typed DSL program, a deterministic execution result, and a natural-language claim. This compositional structure exposes two \emph{structurally diverse} reasoning pathways---neural (claim) and symbolic (execution)---whose errors are governed by different correlation regimes: symbolic errors are highly correlated across candidates due to shared visual perception, while neural errors are more dispersed. We formalize a \textbf{cross-channel verification principle}: agreement between structurally independent pathways provides stronger evidence than repeated consensus within any single pathway, because the former requires convergence across different noise sources while the latter can be inflated by shared errors. We instantiate this principle as \kgated{} dual-pathway Compositional Consensus Verification (\ccv{}), a training-free algorithm that uses cross-layer agreement ($\kappa$) to gate both candidate scoring and output pathway selection. Across four geometry benchmarks, \ccv{} achieves 80.98\% accuracy---a $+$10.41$\pp$ improvement over majority voting, closing 45.9\% of the gap to oracle performance---at zero additional inference cost. A systematic error taxonomy of 355 verification failures reveals that 86\% stem from correlated execution consensus, of which 88.5\% are recovered by $\kappa$-gating. The full evidence ladder shows this is a category-level effect: seven non-compositional selectors, including confidence weighting, learned PRM scores, and learned surface/exec classifiers, all cluster in a narrow 69.75--71.39\% band, while adding compositional cross-layer features jumps to 79--81\%.
 
 \end{abstract}
 
@@ -313,34 +313,35 @@ MathVista-GPS & EN & 208 & Reference (has overlap) \\
 
 \subsection{Main Results}
 
-\begin{table}[t]
+\begin{table*}[t]
 \centering
-\caption{Verification method comparison ($K{=}16$). \ccv{} denotes $\kappa$-gated dual-pathway CCV with $\tau_{\text{exec}}{=}9$. All methods operate on the same candidate pool with zero additional inference cost.}
+\caption{Evidence ladder across verification signal types ($K{=}16$). Surface/confidence methods, including learned PRM scores and self-judged confidence, cluster near 70--71\%. Execution-only signals improve moderately. Cross-layer compositional verification produces the large jump to 79--81\%.}
 \label{tab:main}
 \small
-\begin{tabular}{lcccccc}
+\begin{tabular}{llccccc}
 \toprule
-Dataset & $N$ & Claim MV & Exec MV & EAV & \ccv{} & Oracle \\
+Method & Type & G3K & GeoQA & GPS-c & GPS & All \\
 \midrule
-Geometry3K test & 601 & 66.72 & 72.71 & 74.04 & \textbf{78.54} & 93.51 \\
-GeoQA (zh) & 754 & 73.61 & 75.60 & 77.72 & \textbf{81.83} & 93.50 \\
-MathVista-GPS clean & 146 & 72.60 & 76.71 & 77.40 & \textbf{86.30} & 91.78 \\
-MathVista-GPS & 208 & 69.23 & 72.60 & 75.96 & \textbf{81.25} & 92.79 \\
+\multicolumn{7}{l}{\textit{Surface / confidence signals}} \\
+Claim MV & consensus & 66.72 & 73.61 & 72.60 & 69.23 & 70.57 \\
+Logprob-weighted MV & weighted consensus & -- & -- & -- & -- & 70.80 \\
+CISC $P(\mathrm{True})$-weighted & confidence consensus & -- & -- & -- & -- & 71.39 \\
+URSA-RM weighted MV & learned verifier & -- & -- & -- & -- & 71.33 \\
 \midrule
-\textbf{Total} & \textbf{1709} & 70.57 & 74.31 & 76.18 & \textbf{80.98} & 93.27 \\
+\multicolumn{7}{l}{\textit{Execution channel without cross-layer gating}} \\
+Exec MV & exec consensus & 72.71 & 75.60 & 76.71 & 72.60 & 74.31 \\
+EAV & exec-first priority & 74.04 & 77.72 & 77.40 & 75.96 & 76.18 \\
+\midrule
+\multicolumn{7}{l}{\textit{Cross-layer compositional signals}} \\
+PROVE-style $\kappa$ filter & binary agreement & -- & -- & -- & -- & 79.52 \\
+\ccv{} (ours) & gated + routing & \textbf{78.54} & \textbf{81.83} & \textbf{86.30} & \textbf{81.25} & \textbf{80.98} \\
+\midrule
+Oracle & upper bound & 93.51 & 93.50 & 91.78 & 92.79 & 93.27 \\
 \bottomrule
 \end{tabular}
-\end{table}
+\end{table*}
 
-\ccv{} achieves 80.98\% total accuracy, a $+$10.41$\pp$ improvement over Claim MV and $+$4.80$\pp$ over EAV, closing 45.9\% of the claim-to-oracle gap. On the disjoint heldout/OOD split (excluding dev 300), accuracy is 81.83\%.
-
-\paragraph{Progression of verification signals.}
-\begin{itemize}
-\item Claim MV $\rightarrow$ Exec MV: $+$3.74$\pp$ (symbolic channel outperforms neural channel)
-\item Exec MV $\rightarrow$ EAV: $+$1.87$\pp$ (exec-first priority with consistency scoring)
-\item EAV $\rightarrow$ \ccv{}: $+$4.80$\pp$ ($\kappa$-gated scoring $+$ dual-pathway output)
-\end{itemize}
-Each step adds a structurally deeper verification signal, and each produces a positive gain.
+Table~\ref{tab:main} is the central empirical evidence for our thesis. Seven non-compositional selectors---Claim MV, logprob-weighted MV, CISC, URSA weighted voting, Best-of-$N$, LogReg S-only, and LogReg S+E---all lie in a narrow 69.75--71.39\% band. This includes both self-confidence weighting and an external learned PRM: URSA-RM score-argmax is badly miscalibrated (66.76\%), while answer-cluster weighted voting recovers to 71.33\%, still only $+0.76\pp$ over Claim MV. Execution-only methods improve to 74--76\%, but the large jump appears only when cross-layer agreement is used as a compositional signal: a PROVE-style $\kappa$ filter reaches 79.52\%, and \ccv{} reaches 80.98\%, a $+10.41\pp$ improvement over Claim MV and $+4.80\pp$ over EAV. On the disjoint heldout/OOD split (excluding dev 300), \ccv{} reaches 81.93\%.
 
 \subsection{$K$ Scaling Analysis}
 
@@ -362,27 +363,7 @@ $K$ & Claim MV & Exec MV & \ccv{} & Oracle & \ccv{} $-$ Claim MV \\
 
 The \ccv{} advantage scales with $K$: the gain over Claim MV grows from $+$5.60$\pp$ at $K{=}4$ to $+$10.41$\pp$ at $K{=}16$. Surface consensus saturates quickly (Claim MV gains only $+$1.23$\pp$ from $K{=}4$ to 16), while compositional verification continues extracting signal from larger candidate pools.
 
-\subsection{Verification Signal Ablation}
-
-\begin{table}[h]
-\centering
-\caption{Verification signal hierarchy. Each row adds a deeper level of structural diversity.}
-\label{tab:signals}
-\small
-\begin{tabular}{llcc}
-\toprule
-Signal & Type & Accuracy \\
-\midrule
-Claim MV & within-layer, single channel & 70.57 \\
-Exec MV & within-layer, single channel & 74.31 \\
-VGF consensus & within-layer, perception & 67.88 \\
-$\kappa$ self-consistency & cross-layer, within-candidate & basis of \ccv{} \\
-$\kappa$-gated consensus & cross-layer-gated & \textbf{80.98} \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-VGF consensus---another within-layer signal---not only fails to help but \emph{hurts} performance when added (from 80.05\% to 79.93\%). This reinforces the central finding: within-layer consensus, regardless of which layer, is vulnerable to correlated perception errors. Only cross-layer gating provides robust verification signal.
+As a negative control, VGF consensus---another within-layer signal---not only fails to help but \emph{hurts} performance when added (from 80.05\% to 79.93\%). This reinforces the central finding: within-layer consensus, regardless of which layer, is vulnerable to correlated perception errors. Only cross-layer gating provides robust verification signal.
 
 \subsection{Learned Feature Ablation}
 \label{sec:learned}
@@ -391,30 +372,33 @@ To validate that the compositional features carry the transferable verification 
 
 \begin{table}[h]
 \centering
-\caption{Learned verifier ablation. ``S'' = standard features (logprob, claim cluster), ``E'' = execution features, ``C'' = compositional cross-layer features ($\kappa$, $\kappa \times \text{exec\_cluster}$, $\mu$, $\kappa \times \mu$, sc\_rate).}
+\caption{Compositional feature ablation. ``S'' = standard features (logprob, claim cluster), ``E'' = execution features, ``C'' = compositional cross-layer features ($\kappa$, $\kappa \times \text{exec\_cluster}$, $\mu$, $\kappa \times \mu$, sc\_rate). The last column reports OOD gain over Claim MV.}
 \label{tab:learned}
 \small
-\begin{tabular}{lccc}
+\begin{tabular}{lcccc}
 \toprule
-Features & Dev@300 & OOD & All \\
+Method / Features & Dev@300 & OOD & All & \shortstack{$\Delta$ OOD\\vs Claim MV} \\
 \midrule
-S-only & 67.00 & 71.86 & 70.74 \\
-S+E & 66.33 & 71.69 & 70.63 \\
-S+E+C & 74.67 & 79.85 & 78.47 \\
-C-only & 75.33 & 81.02 & 79.64 \\
+Claim MV (reference) & 66.67 & 71.77 & 70.57 & 0.00 \\
+Best-of-$N$ (logprob) & 66.00 & 71.11 & 69.75 & $-$0.67 \\
+LogReg S-only & 67.00 & 71.86 & 70.74 & $+$0.08 \\
+LogReg S+E & 66.33 & 71.69 & 70.63 & $-$0.08 \\
+LogReg S+E+C & 74.67 & 79.85 & 78.47 & $+$8.08 \\
+LogReg C-only & 75.33 & 81.02 & 79.64 & $+$9.24 \\
 \midrule
-Rule \ccv{} (dual-output) & 77.00 & 81.83 & 80.98 \\
+PROVE-style $\kappa$ filter (rule) & 75.00 & 81.02 & 79.52 & $+$9.24 \\
+Dual-output \ccv{} (ours, rule) & 77.00 & 81.93 & 80.98 & $+$10.16 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 Three findings emerge:
 
-\textbf{(1) Compositional features are the sole source of transferable signal.} Adding execution features to standard features yields no OOD improvement (71.86$\rightarrow$71.69). Adding compositional features produces a $+$8$\pp$ jump (71.69$\rightarrow$79.85). Using \emph{only} compositional features matches full-feature performance. Standard candidate features (logprob, cluster size) are insufficient for geometry verification.
+\textbf{(1) Compositional features are the sole source of transferable signal.} Standard logprob-based selectors and learned surface/exec features are essentially equivalent to Claim MV: Best-of-$N$ is worse (71.11\% OOD), LogReg S-only gives only $+0.08\pp$, and adding execution features without compositional agreement does not help (71.86$\rightarrow$71.69). Adding compositional features produces a $+$8$\pp$ jump (71.69$\rightarrow$79.85), and using \emph{only} compositional features matches full-feature performance.
 
 \textbf{(2) The learned model independently discovers the gating principle.} Standardized logistic coefficients reveal: \texttt{exec\_cluster\_size} has a \emph{negative} coefficient ($-$2.40), while \texttt{$\kappa$ $\times$ exec\_cluster} has a strongly \emph{positive} coefficient ($+$1.96). The data confirms what our theory predicts: raw execution consensus is noise; gated execution consensus is signal.
 
-\textbf{(3) The hand-designed rule is near-optimal.} Rule \ccv{} (80.98\%) slightly outperforms the best learned classifier (C-only: 79.64\% all, 81.02\% OOD). More expressive models (MLP) overfit to dev without OOD gains. This confirms that the compositional structure does the heavy lifting---the specific scorer matters less than the features it operates on.
+\textbf{(3) The hand-designed rule is near-optimal.} A PROVE-style binary $\kappa$ filter already reaches 81.02\% OOD accuracy, showing that cross-layer agreement alone is a strong verifier. Dual-output \ccv{} (80.98\% all, 81.93\% OOD) further improves over this filter by using agreement-gated consensus and output-pathway routing. More expressive models (MLP) overfit to dev without OOD gains. This confirms that the compositional structure does the heavy lifting---the specific scorer matters less than the features it operates on.
 
 \subsection{Error Taxonomy and Recovery Analysis}
 
@@ -474,7 +458,7 @@ The compositional structure enables not only verification but potentially \emph{
 \section{Conclusion}
 % ===========================================================================
 
-We have shown that neuro-symbolic reasoning candidates carry an underutilized verification resource: their compositional structure. By decomposing candidates into perception, logic, computation, and intuition layers, and by formalizing cross-channel agreement as a verification principle, we derive a training-free algorithm that achieves substantial gains over both consensus methods and the implicit assumptions of learned verifiers. The key insight---that agreement between structurally diverse pathways trumps repetition within any single pathway---is grounded in the error correlation structure of shared-perception reasoning, validated by systematic error taxonomy, and confirmed by independent learned feature analysis. We hope this work encourages the community to view output format design not just as a usability choice, but as a first-class verification decision.
+We have shown that neuro-symbolic reasoning candidates carry an underutilized verification resource: their compositional structure. By decomposing candidates into perception, logic, computation, and intuition layers, and by formalizing cross-channel agreement as a verification principle, we derive a training-free algorithm that achieves substantial gains over both consensus methods and the implicit assumptions of learned verifiers. The key insight---that agreement between structurally diverse pathways trumps repetition within any single pathway---is grounded in the error correlation structure of shared-perception reasoning, validated by systematic error taxonomy, and confirmed by a full evidence ladder: non-compositional confidence, consensus, and learned-score methods saturate around 70--71\%, while $\kappa$-based compositional methods reach 79--81\%. We hope this work encourages the community to view output format design not just as a usability choice, but as a first-class verification decision.
 
 % ===========================================================================
 % References - placeholder entries
