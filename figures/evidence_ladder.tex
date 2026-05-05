@@ -38,9 +38,8 @@
 \node[font=\sffamily\tiny, text=black!55] at (11.90,0.58) {95};
 
 \def\xbase{3.15}
-\def\ys{0.50}
 
-\foreach \name/\acc/\y/\color in {
+\foreach \name/\acc/\y/\barcolor in {
   {URSA-RM-8B}/66.76/1.42/ladderSurface,
   {Best-of-N logprob}/69.75/1.92/ladderSurface,
   {Claim MV}/70.57/2.42/ladderSurface,
@@ -54,7 +53,7 @@
 } {
   \pgfmathsetmacro{\w}{(\acc-60)*0.25}
   \node[label] at (3.00,\y) {\name};
-  \draw[bar, draw=\color!85!black, fill=\color!72] ({\xbase},{\y-0.16}) rectangle ({\xbase+\w},{\y+0.16});
+  \draw[bar, draw=\barcolor!85!black, fill=\barcolor!72] ({\xbase},{\y-0.16}) rectangle ({\xbase+\w},{\y+0.16});
   \node[value] at ({\xbase+\w+0.10},\y) {\acc};
 }
 
