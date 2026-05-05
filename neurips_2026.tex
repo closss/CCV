@@ -59,6 +59,8 @@
 \usepackage{amssymb}
 \usepackage{amsthm}
 \usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta}
 \usepackage{algorithm}
 \usepackage{algorithmic}
 \usepackage{multirow}
@@ -100,6 +102,13 @@ Test-time verification for reasoning tasks predominantly treats model outputs as
 \section{Introduction}
 \label{sec:intro}
 % ===========================================================================
+
+\begin{figure}[t]
+    \centering
+    \input{figures/method_overview}
+    \caption{\textbf{Method overview.} A geometry problem is sampled into $K{=}16$ \sketch{} candidates. Each candidate exposes a symbolic pathway (VGF $\rightarrow$ typed DSL $\rightarrow$ execution) and a neural pathway (claim). Cross-channel agreement $\kappa$ filters reliable candidates; if the $\kappa$-pool is empty, \ccv{} falls back to a high-confidence execution majority or claim majority vote.}
+    \label{fig:method-overview}
+\end{figure}
 
 \subsection{The Verification Bottleneck in Geometry Reasoning}
 

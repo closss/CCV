@@ -1,0 +1,83 @@
+\definecolor{figVGFBlue}{HTML}{D9EAFB}
+\definecolor{figDSLGreen}{HTML}{DFF1DE}
+\definecolor{figExecOrange}{HTML}{FCE7C8}
+\definecolor{figClaimPurple}{HTML}{E7DDF5}
+\definecolor{figFakeRed}{HTML}{F4CCCC}
+\definecolor{figNeutralGray}{HTML}{EEEEEE}
+
+\begin{tikzpicture}[
+  scale=0.95,
+  transform shape,
+  x=1cm,
+  y=1cm,
+  font=\sffamily,
+  module/.style={rounded corners=3pt, draw=black!55, line width=0.55pt, align=center, minimum height=0.95cm},
+  smallmodule/.style={rounded corners=3pt, draw=black!55, line width=0.55pt, align=center, minimum height=0.78cm},
+  flowarrow/.style={-{Latex[length=2.1mm,width=1.5mm]}, draw=black!60, line width=0.55pt},
+  botharrow/.style={<->, >=Latex, draw=black!65, line width=0.65pt},
+  softpath/.style={-{Latex[length=1.9mm,width=1.3mm]}, densely dashed, draw=black!35, line width=0.5pt},
+  cand/.style={rounded corners=2pt, draw=black!45, line width=0.35pt, align=left, minimum width=4.55cm, minimum height=0.38cm, text width=4.35cm, inner xsep=4pt, font=\sffamily\scriptsize},
+  decision/.style={rounded corners=3pt, draw=black!60, line width=0.5pt, fill=white, align=center, text width=2.25cm, minimum height=0.62cm, font=\sffamily\scriptsize},
+  leaf/.style={rounded corners=3pt, draw=black!60, line width=0.5pt, fill=figNeutralGray!45, align=center, text width=2.15cm, minimum height=0.58cm, font=\sffamily\scriptsize}
+]
+
+\node[anchor=west, font=\sffamily\bfseries\small] at (0.05,7.38) {Input geometry problem};
+\draw[rounded corners=4pt, draw=black!30, fill=black!02, line width=0.5pt] (0.05,4.35) rectangle (2.75,7.15);
+\coordinate (A) at (0.50,4.82);
+\coordinate (B) at (2.25,4.82);
+\coordinate (C) at (1.22,6.55);
+\draw[black!70, line width=0.85pt] (A) -- (B) -- (C) -- cycle;
+\draw[black!55, line width=0.55pt] (0.38,6.18) -- (2.42,6.18);
+\node[font=\sffamily\scriptsize] at (0.35,4.62) {$A$};
+\node[font=\sffamily\scriptsize] at (2.42,4.62) {$B$};
+\node[font=\sffamily\scriptsize] at (1.20,6.76) {$C$};
+\node[font=\sffamily\scriptsize] at (0.83,5.15) {$60^\circ$};
+\node[font=\sffamily\scriptsize] at (1.86,5.04) {$45^\circ$};
+\node[font=\sffamily\scriptsize] at (1.36,4.58) {$AB=8$};
+\draw[draw=figExecOrange!85!black, line width=0.55pt] (0.74,4.89) arc[start angle=15,end angle=58,radius=0.34];
+\draw[draw=figExecOrange!85!black, line width=0.55pt] (2.03,4.90) arc[start angle=160,end angle=124,radius=0.34];
+\node[font=\sffamily\scriptsize, align=center] at (1.40,5.78) {Find\\$\angle C$};
+
+\draw[flowarrow] (2.75,5.86) -- node[above, font=\sffamily\scriptsize] {$K=16$ samples} (3.35,5.86);
+
+\node[anchor=west, font=\sffamily\bfseries\small] at (3.15,7.38) {Sketch Format (single candidate)};
+\node[module, fill=figVGFBlue, text width=2.15cm] (vgf) at (4.20,6.25) {\textbf{VGF}\\[-1pt]{\scriptsize Visual Grounding Facts}\\[-1pt]{\scriptsize $\angle A=60^\circ$}\\[-1pt]{\scriptsize $AB \parallel CD,\ldots$}};
+\node[module, fill=figDSLGreen, text width=2.25cm] (dsl) at (6.82,6.25) {\textbf{DSL}\\[-1pt]{\scriptsize Typed Program}\\[-1pt]{\scriptsize \texttt{angle\_C =}}\\[-1pt]{\scriptsize \texttt{180 - 60 - 45}}};
+\node[smallmodule, fill=figExecOrange, text width=1.48cm] (exec) at (9.18,6.25) {\textbf{Exec}\\[-1pt]{\small $=75^\circ$}};
+\node[smallmodule, fill=figClaimPurple, text width=1.56cm] (claim) at (12.25,6.25) {\textbf{Claim}\\[-1pt]{\small $=75^\circ$}};
+\draw[flowarrow] (vgf.east) -- (dsl.west);
+\draw[flowarrow] (dsl.east) -- (exec.west);
+\draw[botharrow] (exec.east) -- node[above, font=\sffamily\scriptsize, align=center] {cross-channel\\agreement} node[below, font=\sffamily\small] {$\kappa=\checkmark$} (claim.west);
+\draw[softpath] (3.22,5.44) -- node[below, font=\sffamily\scriptsize, text=black!55] {symbolic pathway (correlated noise)} (9.98,5.44);
+\draw[softpath] (2.62,6.92) .. controls (5.20,7.82) and (9.85,7.72) .. node[above, pos=0.62, font=\sffamily\scriptsize, text=black!55] {neural pathway (dispersed noise)} (12.12,6.74);
+
+\draw[black!18, line width=0.5pt] (3.05,4.86) -- (14.35,4.86);
+\node[anchor=west, font=\sffamily\bfseries\small] at (3.15,4.55) {CCV Verification (multi-candidate selection)};
+\node[anchor=west, font=\sffamily\scriptsize, text=black!65] at (3.17,4.17) {candidate pool};
+\node[cand, fill=figDSLGreen!78] at (5.43,3.74) {\textbf{$c_1$}\quad claim $75^\circ$\quad exec $75^\circ$\quad $\kappa=1$};
+\node[cand, fill=figDSLGreen!78] at (5.43,3.27) {\textbf{$c_2$}\quad claim $75^\circ$\quad exec $75^\circ$\quad $\kappa=1$};
+\node[cand, fill=figFakeRed!80] at (5.43,2.80) {\textbf{$c_3$}\quad claim $80^\circ$\quad exec $80^\circ$\quad fake $\kappa$};
+\node[cand, fill=figNeutralGray] at (5.43,2.33) {\textbf{$c_4$}\quad claim $60^\circ$\quad exec $75^\circ$\quad $\kappa=0$};
+\node[cand, fill=figDSLGreen!78] at (5.43,1.86) {\textbf{$c_5$}\quad claim $75^\circ$\quad exec $75^\circ$\quad $\kappa=1$};
+\node[cand, fill=figNeutralGray] at (5.43,1.39) {\textbf{$c_6$}\quad claim $90^\circ$\quad exec $75^\circ$\quad $\kappa=0$};
+\node[font=\sffamily\scriptsize, text=black!60] at (5.43,0.99) {$\vdots$};
+\node[cand, fill=figNeutralGray] at (5.43,0.62) {\textbf{$c_{16}$}\quad claim $45^\circ$\quad exec $75^\circ$\quad $\kappa=0$};
+
+\node[decision] (q1) at (9.20,3.42) {$\kappa$-pool nonempty?};
+\node[leaf, fill=figDSLGreen!45] (yes1) at (12.25,3.92) {gated scoring\\$\rightarrow$ output claim};
+\node[decision] (q2) at (9.20,2.06) {exec majority $\geq \tau$?};
+\node[leaf, fill=figExecOrange!55] (yes2) at (12.25,2.35) {output exec};
+\node[leaf, fill=figClaimPurple!55] (no2) at (12.25,1.15) {output claim MV};
+\draw[flowarrow] (q1.east) -- node[above, font=\sffamily\scriptsize] {Yes} (yes1.west);
+\draw[flowarrow] (q1.south) -- node[left, font=\sffamily\scriptsize] {No} (q2.north);
+\draw[flowarrow] (q2.east) -- node[above, font=\sffamily\scriptsize] {Yes} (yes2.west);
+\draw[flowarrow] (q2.south east) -- node[below, font=\sffamily\scriptsize] {No} (no2.west);
+
+\draw[fill=figDSLGreen!78, draw=black!35] (3.16,0.08) rectangle (3.42,0.27);
+\node[anchor=west, font=\sffamily\tiny] at (3.48,0.175) {$\kappa=1$, correct};
+\draw[fill=figFakeRed!80, draw=black!35] (5.23,0.08) rectangle (5.49,0.27);
+\node[anchor=west, font=\sffamily\tiny] at (5.55,0.175) {fake $\kappa$};
+\draw[fill=figNeutralGray, draw=black!35] (6.72,0.08) rectangle (6.98,0.27);
+\node[anchor=west, font=\sffamily\tiny] at (7.04,0.175) {$\kappa=0$};
+
+\end{tikzpicture}
