@@ -1,0 +1,49 @@
+\definecolor{tauDev}{HTML}{1F77B4}
+\definecolor{tauOod}{HTML}{D62728}
+\definecolor{tauBand}{HTML}{EFEFEF}
+
+\begin{tikzpicture}[
+  x=0.52cm,
+  y=0.58cm,
+  font=\sffamily,
+  axis/.style={draw=black!50, line width=0.55pt},
+  grid/.style={draw=black!14, line width=0.35pt},
+  ticklabel/.style={font=\sffamily\scriptsize, text=black!62},
+  legend/.style={font=\sffamily\scriptsize, text=black!75, anchor=west}
+]
+
+\fill[tauBand] (5,0.40) rectangle (14,7.35);
+\node[ticklabel, anchor=south] at (9.5,7.35) {$\tau_{\mathrm{exec}}=5\ldots14$};
+
+\foreach \y/\lab in {1/76,3/78,5/80,7/82} {
+  \draw[grid] (1,\y) -- (16,\y);
+  \node[ticklabel, anchor=east] at (0.70,\y) {\lab};
+}
+\draw[axis] (1,0.40) -- (16,0.40);
+\draw[axis] (1,0.40) -- (1,7.35);
+
+\foreach \x in {1,...,16} {
+  \draw[axis] (\x,0.40) -- (\x,0.28);
+  \node[ticklabel, anchor=north] at (\x,0.20) {\x};
+}
+
+\draw[tauDev, line width=1.2pt] plot coordinates {(1,1.67) (2,1.67) (3,1.67) (4,1.67) (5,2.00) (6,2.00) (7,2.00) (8,2.00) (9,2.00) (10,2.00) (11,2.00) (12,1.67) (13,1.33) (14,1.00) (15,0.67) (16,0.67)};
+\draw[tauOod, line width=1.2pt] plot coordinates {(1,5.13) (2,5.20) (3,5.20) (4,5.41) (5,5.77) (6,5.91) (7,6.05) (8,6.19) (9,6.83) (10,6.83) (11,6.76) (12,6.41) (13,6.26) (14,6.33) (15,6.12) (16,6.19)};
+
+\foreach \x/\y in {1/1.67,2/1.67,3/1.67,4/1.67,5/2.00,6/2.00,7/2.00,8/2.00,9/2.00,10/2.00,11/2.00,12/1.67,13/1.33,14/1.00,15/0.67,16/0.67} {
+  \fill[tauDev] (\x,\y) circle (2.0pt);
+}
+\foreach \x/\y in {1/5.13,2/5.20,3/5.20,4/5.41,5/5.77,6/5.91,7/6.05,8/6.19,9/6.83,10/6.83,11/6.76,12/6.41,13/6.26,14/6.33,15/6.12,16/6.19} {
+  \fill[tauOod] (\x,\y) rectangle ++(0.13,0.13);
+}
+
+\node[ticklabel, anchor=north] at (8.5,-0.48) {$\tau_{\mathrm{exec}}$};
+\node[ticklabel, rotate=90, anchor=south] at (-0.35,3.95) {CCV accuracy (\%)};
+\draw[tauDev, line width=1.2pt] (11.6,1.28) -- (12.4,1.28);
+\fill[tauDev] (12.0,1.28) circle (2.0pt);
+\node[legend] at (12.55,1.28) {Geometry3K dev300};
+\draw[tauOod, line width=1.2pt] (11.6,0.78) -- (12.4,0.78);
+\fill[tauOod] (11.94,0.72) rectangle ++(0.13,0.13);
+\node[legend] at (12.55,0.78) {Heldout+OOD};
+
+\end{tikzpicture}

@@ -326,7 +326,7 @@ MathVista-GPS & EN & 208 & Reference (has overlap) \\
 
 \paragraph{Sampling.} $K{=}16$, temperature $0.8$, top-$p$ $0.95$. All verification experiments operate on the same frozen rollout pool---no additional inference.
 
-\paragraph{Hyperparameter selection.} All \ccv{} parameters are selected on the first 300 questions of Geometry3K test (dev split). The remaining benchmarks serve as disjoint heldout/OOD evaluation.
+\paragraph{Hyperparameter selection.} The single \ccv{} threshold is selected on the first 300 questions of Geometry3K test (dev split). We use $\tau_{\text{exec}}{=}9$ for both Qwen3.5-9B and Gemma4-E4B; the remaining benchmarks serve as disjoint heldout/OOD evaluation.
 
 \subsection{Main Results}
 
@@ -365,7 +365,9 @@ Oracle & upper bound & 93.51 & 93.50 & 91.78 & 92.79 & 93.27 \\
 \end{tabular}
 \end{table*}
 
-Table~\ref{tab:main} is the central empirical evidence for our thesis. Seven non-compositional selectors---Claim MV, logprob-weighted MV, CISC, URSA weighted voting, Best-of-$N$, LogReg S-only, and LogReg S+E---all lie in a narrow 69.75--71.39\% band. This includes both self-confidence weighting and an external learned PRM: URSA-RM score-argmax is badly miscalibrated (66.76\%), while answer-cluster weighted voting recovers to 71.33\%, still only $+0.76\pp$ over Claim MV. Execution-only methods improve to 74--76\%, but the large jump appears only when cross-layer agreement is used as a compositional signal: a PROVE-style $\kappa$ filter reaches 79.52\%, and \ccv{} reaches 80.98\%, a $+10.41\pp$ improvement over Claim MV and $+4.80\pp$ over EAV. On the disjoint heldout/OOD split (excluding dev 300), \ccv{} reaches 81.93\%.
+Table~\ref{tab:main} is the central empirical evidence for our thesis. Seven non-compositional selectors---Claim MV, logprob-weighted MV, CISC, URSA weighted voting, Best-of-$N$, LogReg S-only, and LogReg S+E---all lie in a narrow 69.75--71.39\% band. This includes both self-confidence weighting and an external learned PRM: URSA-RM score-argmax is badly miscalibrated (66.76\%), while answer-cluster weighted voting recovers to 71.33\%, still only $+0.76\pp$ over Claim MV. Execution-only methods improve to 74--76\%, but the large jump appears only when cross-layer agreement is used as a compositional signal: a PROVE-style $\kappa$ filter reaches 79.52\%, and \ccv{} reaches 80.98\%, a $+10.41\pp$ improvement over Claim MV and $+4.80\pp$ over EAV. On the disjoint heldout/OOD split (excluding dev 300), \ccv{} reaches 81.93\%. A sweep over the only tunable parameter, $\tau_{\text{exec}}$, shows that \ccv{} is robust rather than finely tuned: across $\tau_{\text{exec}}=5\ldots14$, dev accuracy varies by 1.00$\pp$ and heldout/OOD accuracy by 1.06$\pp$ (Appendix~\ref{app:tau-sensitivity}).
+
+Appendix~\ref{app:cross-model} validates the same protocol on Gemma4-E4B using the same $\tau_{\text{exec}}{=}9$. There the execution pathway alone is even weaker than the claim pathway (Exec MV 41.08\% vs Claim MV 44.94\%), making EAV ineffective, yet \ccv{} gains $+7.90\pp$ over EAV; this is the regime predicted by Theorem~\ref{thm:snr}, where raw correlated execution votes are noisy but cross-channel agreement remains a high-precision filter.
 
 \subsection{$K$ Scaling Analysis}
 
@@ -493,6 +495,66 @@ We have shown that neuro-symbolic reasoning candidates carry an underutilized ve
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \appendix
+
+\section{$\tau_{\text{exec}}$ Sensitivity}
+\label{app:tau-sensitivity}
+
+The only tunable hyperparameter in \ccv{} is the execution-majority threshold $\tau_{\text{exec}}$, used only when the $\kappa$-pool is empty. We sweep $\tau_{\text{exec}}=1\ldots16$ on the main Qwen3.5-9B s240 $K{=}16$ rollout pool, using the same split protocol as the main paper: Geometry3K qid$<300$ for dev, and Geometry3K qid$\geq300$ plus GeoQA, MathVista-GPS clean, and MathVista-GPS for heldout/OOD evaluation. We use the resulting $\tau_{\text{exec}}{=}9$ for both Qwen3.5-9B and Gemma4-E4B.
+
+\begin{figure}[h]
+    \centering
+    \input{figures/ccv_tau_exec_sensitivity}
+    \caption{\textbf{Sensitivity to $\tau_{\text{exec}}$.} \ccv{} is stable over a broad range of execution thresholds. In the plateau $\tau_{\text{exec}}=5\ldots14$, dev accuracy varies from 76.00\% to 77.00\%, and heldout/OOD accuracy varies from 80.77\% to 81.83\%.}
+    \label{fig:tau-sensitivity}
+\end{figure}
+
+\begin{table}[h]
+\centering
+\caption{Selected points from the $\tau_{\text{exec}}$ sweep. The dev-selected threshold is $\tau_{\text{exec}}=9$, tied with 10.}
+\label{tab:tau-sensitivity}
+\small
+\begin{tabular}{rccc}
+\toprule
+$\tau_{\text{exec}}$ & Dev@300 & Heldout/OOD & All \\
+\midrule
+1 & 76.67 & 80.13 & 79.52 \\
+5 & 77.00 & 80.77 & 80.11 \\
+9 & \textbf{77.00} & \textbf{81.83} & \textbf{80.98} \\
+10 & \textbf{77.00} & \textbf{81.83} & \textbf{80.98} \\
+14 & 76.00 & 81.33 & 80.40 \\
+16 & 75.67 & 81.19 & 80.22 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Cross-Model Validation}
+\label{app:cross-model}
+
+Table~\ref{tab:cross-model} evaluates the same verification protocol on a lower-capacity Gemma4-E4B generator, using the same $\tau_{\text{exec}}{=}9$ as Qwen3.5-9B. The Gemma4 pool uses the same frozen $K{=}16$ four-benchmark setting as the main Qwen3.5-9B experiments: Geometry3K test (601), GeoQA test (754), MathVista-GPS clean (146), and MathVista-GPS (208), for $N{=}1709$ questions and 27,344 candidates. The evaluation uses the benchmark files in \texttt{clean/assets}; it does not use the deprecated 400-question checkpoint-selection set.
+
+\begin{table}[h]
+\centering
+\caption{Cross-model validation on the same frozen $K{=}16$ four-benchmark protocol ($N{=}1709$), using $\tau_{\text{exec}}{=}9$ for both models. Absolute accuracy differs because Qwen3.5-9B has higher model capacity than Gemma4-E4B, but the gain pattern is consistent: cross-layer $\kappa$ filtering and \ccv{} improve over surface consensus for both models without additional inference.}
+\label{tab:cross-model}
+\small
+\begin{tabular}{lcc}
+\toprule
+Method & Qwen3.5-9B & Gemma4-E4B \\
+\midrule
+Claim MV & 70.57 & 44.94 \\
+Exec MV & 74.31 & 41.08 \\
+EAV & 76.18 & 44.88 \\
+PROVE-style $\kappa$ filter & 79.52 & 51.90 \\
+\ccv{} (ours) & \textbf{80.98} & \textbf{52.78} \\
+\midrule
+\ccv{} $-$ Claim MV & $+10.41$ & $+7.84$ \\
+\ccv{} $-$ EAV & $+4.80$ & $+7.90$ \\
+Oracle & 93.27 & 91.75 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The notable difference is that Gemma4 reverses the raw pathway ordering: Exec MV is below Claim MV (41.08\% vs 44.94\%), whereas Qwen's execution pathway is stronger than its claim pathway. Consequently, EAV, an execution-first priority rule, is ineffective on Gemma4 (44.88\% vs 44.94\% Claim MV). This pattern is expected for a smaller model with weaker visual grounding: within-layer execution consensus is more easily dominated by correlated perception errors. The result therefore strengthens rather than weakens the verification story. \ccv{} does not trust the raw execution vote; it uses claim--execution agreement as a precision filter. Even when the execution pathway is worse in aggregate, candidates where claim and execution agree remain informative, yielding $+7.84\pp$ over Claim MV and $+7.90\pp$ over EAV on Gemma4.
 
 \section{Proofs for the Cross-Channel Verification Analysis}
 \label{app:proofs}
