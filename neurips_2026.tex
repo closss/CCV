@@ -106,7 +106,7 @@ Multimodal geometry reasoning requires models to jointly perceive diagrams and p
 
 \begin{figure}[t]
     \centering
-    \includesvg[width=\linewidth,inkscapelatex=false]{figures/neurips_kappa_gated_decomposition}
+    \includesvg[width=\linewidth,inkscapelatex=false]{figures/Method_overview}
     \caption{\textbf{Method overview.} A geometry problem is sampled into $K{=}16$ \sketch{} candidates. Each candidate exposes a symbolic pathway (VGF $\rightarrow$ typed DSL $\rightarrow$ execution) and a neural pathway (claim). Cross-channel agreement $\kappa$ filters reliable candidates; if the $\kappa$-pool is empty, \ccv{} falls back to a high-confidence execution majority or claim majority vote.}
     \label{fig:method-overview}
 \end{figure}
@@ -256,7 +256,7 @@ Importantly, condition~\eqref{eq:snr_condition} can be satisfied even when $\rho
 
 \begin{figure}[t]
     \centering
-    \input{figures/precision_filtering}
+    \includesvg[width=\linewidth,inkscapelatex=false]{figures/precision}
     \caption{\textbf{Cross-channel precision filtering.} Left: $\kappa$-gating keeps candidates where claim and execution agree. True agreement occupies the claim-correct/exec-correct quadrant, while false agreement is dispersed across many wrong answers. Right: empirically, the $\kappa$-filtered pool is more correlated than raw execution votes, but its much higher precision yields a $4.1\times$ SNR improvement.}
     \label{fig:precision-filtering}
 \end{figure}
@@ -332,9 +332,9 @@ MathVista-GPS & EN & 208 & Reference (has overlap) \\
 
 \begin{figure}[t]
     \centering
-    \input{figures/evidence_ladder}
-    \caption{\textbf{Evidence ladder.} Surface and confidence-based selectors cluster near 70--71\%, execution-only methods improve moderately, and cross-layer compositional verification produces the main jump to 79--81\%. Oracle is shown as a dashed upper bound.}
-    \label{fig:evidence-ladder}
+    \includesvg[width=\linewidth,inkscapelatex=false]{figures/figure3}
+    \caption{\textbf{Evidence ladder and scaling law.} Surface and confidence-based selectors cluster near 70--71\%, execution-only methods improve moderately, and cross-layer compositional verification produces the main jump to 79--81\%. As $K$ increases, the \ccv{} gain over Claim MV grows, indicating that compositional verification unlocks additional rollout diversity.}
+    \label{fig:evidence-scaling}
 \end{figure}
 
 \begin{table*}[t]
