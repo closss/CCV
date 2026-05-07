@@ -592,7 +592,7 @@ Dual-output \ccv{} (ours, rule) & 77.00 & 81.93 & 80.98 & $+$10.16 \\
 \section{Cross-Model Validation}
 \label{app:cross-model}
 
-Table~\ref{tab:cross-model} evaluates the same verification protocol on a lower-capacity Gemma4-E4B generator, using the same $\tau_{\text{exec}}{=}9$ as Qwen3.5-9B. The Gemma4 pool uses the same frozen $K{=}16$ four-benchmark setting as the main Qwen3.5-9B experiments: Geometry3K test (601), GeoQA test (754), MathVista-GPS clean (146), and MathVista-GPS (208), for $N{=}1709$ questions and 27,344 candidates. The evaluation uses the benchmark files in \texttt{clean/assets}; it does not use the deprecated 400-question checkpoint-selection set.
+Table~\ref{tab:cross-model} evaluates the same verification protocol on a lower-capacity Gemma4-E4B generator, using the same $\tau_{\text{exec}}{=}9$ as Qwen3.5-9B. The Gemma4 pool uses the same frozen $K{=}16$ four-benchmark setting as the main Qwen3.5-9B experiments: Geometry3K test (601), GeoQA test (754), MathVista-GPS clean (146), and MathVista-GPS (208), for $N{=}1709$ questions and 27,344 candidates. The evaluation uses the standard benchmark files; it does not use the deprecated 400-question checkpoint-selection set.
 
 \begin{table}[h]
 \centering
@@ -820,6 +820,14 @@ $\kappa$-filtered MV & 9.09 & 0.871 & 0.646 & 1.33 \\
 \end{tabular}
 \end{table}
 The retained pool is therefore 23\% more correlated, but the SNR proxy improves by $4.1\times$. This empirical regime is exactly the counterintuitive case captured by Theorem~\ref{thm:snr}: precision filtering dominates the correlation penalty. The observed false self-consistency rate is 12.9\%, so most $\kappa{=}1$ candidates correspond to true rather than accidental agreement.
+
+\newpage
+\input{checklist.tex}
+
+\end{document}
+t}
+\end{document}
+$\kappa{=}1$ candidates correspond to true rather than accidental agreement.
 
 \newpage
 \input{checklist.tex}
