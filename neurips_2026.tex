@@ -342,16 +342,16 @@ Method & Type & G3K & GeoQA & GPS-c & GPS & All \\
 \midrule
 \multicolumn{7}{l}{\textit{Surface / confidence signals}} \\
 Claim MV & consensus & 66.72 & 73.61 & 72.60 & 69.23 & 70.57 \\
-Logprob-weighted MV & weighted consensus & -- & -- & -- & -- & 70.80 \\
-CISC $P(\mathrm{True})$-weighted & confidence consensus & -- & -- & -- & -- & 71.39 \\
-URSA-RM weighted MV & learned verifier & -- & -- & -- & -- & 71.33 \\
+Logprob-weighted MV & weighted consensus & 66.56 & 73.87 & 72.60 & 70.67 & 70.80 \\
+CISC $P(\mathrm{True})$-weighted & confidence consensus & 68.05 & 74.27 & 72.60 & 69.71 & 71.39 \\
+URSA-RM weighted MV & learned verifier & 62.73 & 75.60 & 79.45 & 75.00 & 71.33 \\
 \midrule
 \multicolumn{7}{l}{\textit{Execution channel without cross-layer gating}} \\
 Exec MV & exec consensus & 72.71 & 75.60 & 76.71 & 72.60 & 74.31 \\
 EAV & exec-first priority & 74.04 & 77.72 & 77.40 & 75.96 & 76.18 \\
 \midrule
 \multicolumn{7}{l}{\textit{Cross-layer compositional signals}} \\
-PROVE-style $\kappa$ filter & binary agreement & -- & -- & -- & -- & 79.52 \\
+PROVE-style $\kappa$ filter & binary agreement & 76.54 & 82.10 & 81.51 & 77.40 & 79.52 \\
 \ccv{} (ours) & gated + routing & \textbf{78.54} & \textbf{81.83} & \textbf{86.30} & \textbf{81.25} & \textbf{80.98} \\
 \midrule
 Oracle & upper bound & 93.51 & 93.50 & 91.78 & 92.79 & 93.27 \\
