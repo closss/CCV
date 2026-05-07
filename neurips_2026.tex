@@ -59,7 +59,6 @@
 \usepackage{amssymb}
 \usepackage{amsthm}
 \usepackage{graphicx}
-\usepackage{svg}
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta}
 \usepackage{algorithm}
@@ -107,7 +106,7 @@ Multimodal geometry reasoning requires models to jointly perceive diagrams and p
 
 \begin{figure}[t]
     \centering
-    \includesvg[width=\linewidth,inkscapelatex=false]{figures/Method_overview}
+    \includegraphics[width=\linewidth]{figures/Method_overview.png}
     \caption{\textbf{Method overview.} A geometry problem is sampled into $K{=}16$ \sketch{} candidates. Each candidate exposes a symbolic pathway (VGF $\rightarrow$ typed DSL $\rightarrow$ execution) and a neural pathway (claim). Cross-channel agreement $\kappa$ filters reliable candidates; if the $\kappa$-pool is empty, \ccv{} falls back to a high-confidence execution majority or claim majority vote.}
     \label{fig:method-overview}
 \end{figure}
@@ -136,14 +135,8 @@ We formalize the following principle. Consider two verification channels $C_1$ (
 
 Within-channel consensus can be inflated by shared errors (all candidates misread the same angle), but cross-channel agreement requires two structurally different noise processes to simultaneously produce the same answer. The probability of this occurring by chance is governed by the cross-channel error coupling, which we empirically measure at $P(\text{exec correct} \mid \text{claim correct}) \approx 0.225$---far lower than the within-channel consensus rates, confirming that the two pathways are only weakly coupled.
 
-\subsection{Contributions}
-We make four contributions:
-\begin{enumerate}
-    \item \textbf{\sketch{} format}: A compositional output format decomposing geometry reasoning into VGF $+$ typed DSL $+$ execution $+$ claim, achieving $>$99.9\% format compliance with a 9B VLM.
-    \item \textbf{\ccv{}}: A training-free algorithm that uses cross-channel agreement ($\kappa$) to gate both scoring and output selection, achieving $+$10.41$\pp$ over MV across four benchmarks at zero additional inference cost.
-    \item \textbf{Cross-model validation}: The full protocol transfers to Gemma4-E4B (a different model family) with the same fixed threshold, yielding $+7.84\pp$ over Claim MV and confirming the model-agnostic nature of cross-channel precision filtering.
-    \item \textbf{Systematic analysis}: A verification failure taxonomy showing that $\kappa$-gating recovers 88.5\% of the dominant failure subtype where symbolic consensus fails but neural intuition holds.
-\end{enumerate}
+\paragraph{Contributions.}
+This paper turns the internal structure of neuro-symbolic candidates into a test-time verification signal. We introduce the \sketch{} format, which decomposes geometry reasoning into VGF, typed DSL, deterministic execution, and a neural claim while maintaining $>$99.9\% format compliance with a 9B VLM. Building on this structure, we propose \ccv{}, a training-free verifier that gates scoring and output routing through claim--execution agreement, improving over MV by $+10.41\pp$ across four benchmarks with no additional inference. The same fixed protocol transfers to Gemma4-E4B, yielding $+7.84\pp$ over Claim MV, and a failure taxonomy shows why: $\kappa$-gating recovers 88.5\% of the dominant failure subtype where symbolic consensus fails but neural intuition holds.
 
 % ===========================================================================
 \section{The \sketch{} Format}
@@ -229,7 +222,7 @@ This yields a testable, counterintuitive prediction: $\kappa$-gating need not re
 
 \begin{figure}[t]
     \centering
-    \includesvg[width=\linewidth,inkscapelatex=false]{figures/precision}
+    \includegraphics[width=\linewidth]{figures/precision.png}
     \caption{\textbf{Cross-channel precision filtering.} Left: $\kappa$-gating keeps candidates where claim and execution agree. True agreement occupies the claim-correct/exec-correct quadrant, while false agreement is dispersed across many wrong answers. Right: empirically, the $\kappa$-filtered pool is more correlated than raw execution votes, but its much higher precision yields a $4.1\times$ SNR improvement.}
     \label{fig:precision-filtering}
 \end{figure}
@@ -299,7 +292,7 @@ MathVista-GPS~\cite{lu2024mathvista} & EN & 208 & Reference \\
 
 \begin{figure}[t]
     \centering
-    \includesvg[width=\linewidth,inkscapelatex=false]{figures/figure3}
+    \includegraphics[width=\linewidth]{figures/figure3.png}
     \caption{\textbf{Evidence ladder and $K$ scaling.} Surface and confidence-based selectors cluster near 70--71\%, execution-only methods improve moderately, and cross-layer compositional verification produces the main jump to 79--81\%. As $K$ increases, the \ccv{} gain over Claim MV grows, indicating that compositional verification unlocks additional rollout diversity.}
     \label{fig:evidence-scaling}
 \end{figure}
@@ -437,7 +430,7 @@ Exec\ding{55}\,Claim\ding{55} (both pathways wrong) lies outside the reach of se
 
 \begin{figure*}[t]
     \centering
-    \includesvg[width=\textwidth,inkscapelatex=false]{figures/figure4}
+    \includegraphics[width=\textwidth]{figures/figure4.png}
     \caption{\textbf{Error flow and dynamic routing.} Among 355 EAV failures with an oracle-correct candidate, wrong execution consensus dominates (86\%) and splits into three subtypes: Exec{\ding{55}}\,Claim{\ding{51}}, Exec{\ding{55}}\,Claim{\ding{55}}, and Exec{\ding{55}}\,Claim?. In the recoverable Exec{\ding{55}}\,Claim{\ding{51}} stream, the claim majority is correct while the execution majority is wrong; \ccv{}'s $\kappa$ filter routes 123/139 cases (88.5\%) to the correct neural-claim output, illustrating how output-pathway routing rescues samples when the symbolic channel collapses.}
     \label{fig:routing-sankey}
 \end{figure*}
@@ -534,23 +527,25 @@ The final 66 filtered examples consist of 61 execution-answer mismatches and fiv
 \paragraph{Stage 1: stored source prompt for frontier CoT traces.}
 We did not rerun Qwen3-VL-235B-A22B-Thinking for this paper. We use an existing CoT source whose stored user messages follow the problem image plus the following prompt pattern:
 \begin{verbatim}
-Solve this geometry problem. Study the diagram and select the correct answer.
+Solve this geometry problem. Study the diagram and select
+the correct answer.
 
 {problem_text}
 {choices}
 
-Do not explain your answer but write only the answer label (A, B, ...) in this
-format:
+Do not explain your answer but write only the answer label
+(A, B, ...) in this format:
 Answer: \boxed{...}.
 \end{verbatim}
 
 \paragraph{Stage 2: VGF+DSL reformatting.}
-DeepSeek V4 Pro receives no image input. It reformats the official problem, choices, official answer, and Qwen3-VL natural-language CoT into the target \sketch{} format using the following template:
+DeepSeek V4 Pro receives no image input. It reformats the official problem, choices, official answer, and Qwen3-VL CoT into the target \sketch{} format using the following template:
 \begin{verbatim}
-Convert the provided Qwen3-VL-235B natural-language geometry chain-of-thought
-into the target VGF+DSL format.
-Do not solve from scratch. Use the teacher CoT as the visual/reasoning evidence
-and use the official gold answer as the final target.
+Convert the provided Qwen3-VL-235B natural-language geometry
+chain-of-thought into the target VGF+DSL format.
+Do not solve from scratch. Use the teacher CoT as the visual
+and reasoning evidence, and use the official gold answer as
+the final target.
 Return exactly three sections in this order and no extra sections:
 [VGF]
 [DSL]
@@ -558,31 +553,36 @@ Return exactly three sections in this order and no extra sections:
 
 [VGF] rules:
 Output a raw JSON list only. Do not use markdown fences.
-Each item must be {"relation": <relation>, "entities": [<tokens>]} with exact
-relation arity.
+Each item must be {"relation": <relation>,
+"entities": [<tokens>]} with exact relation arity.
 Allowed relations: {allowed_vgf_relations}.
 Relation arities: {relation_arities}.
-For unary shape relations, put the whole object in one entity token, e.g.
+For unary shape relations, put the whole object in one entity
+token, e.g.
 {"relation":"parallelogram","entities":["MNPQ"]}.
-Use at most 4 facts to stay safely under the validator limit of 5 facts.
+Use at most 4 facts to stay safely under the validator limit
+of 5 facts.
 Use [] if no reliable visual fact is needed.
 
 [DSL] rules:
-Output executable Python assignment statements only. Do not use markdown fences.
+Output executable Python assignment statements only.
+Do not use markdown fences.
 Do not include comments or prose.
-Never write import statements, including 'from math import ...'. Math functions
-are already available by name.
+Never write import statements, including 'from math import ...'.
+Math functions are already available by name.
 Every variable must be assigned before it is used.
 Do not write placeholder equations with unknown symbols.
 The final assignment must define a variable named answer.
-The value of answer must evaluate to the official gold option value; use the
-teacher CoT equations to derive that value.
-Allowed math names: sqrt, pi, sin, cos, tan, radians, degrees, asin, acos, atan,
-abs, min, max, round.
-Do not read files, import modules, call external tools, or use input/output
-functions.
-[Final Answer] must be exactly the official gold option letter: {gold}.
-In [DSL], set answer to the numeric or symbolic value of option {gold}:
+The value of answer must evaluate to the official gold option
+value; use the teacher CoT equations to derive that value.
+Allowed math names: sqrt, pi, sin, cos, tan, radians, degrees,
+asin, acos, atan, abs, min, max, round.
+Do not read files, import modules, call external tools, or use
+input/output functions.
+[Final Answer] must be exactly the official gold option letter:
+{gold}.
+In [DSL], set answer to the numeric or symbolic value of
+option {gold}:
 {gold_value}.
 
 Official problem:
