@@ -326,7 +326,7 @@ MathVista-GPS & EN & 208 & Reference (has overlap) \\
 
 \paragraph{Sampling.} $K{=}16$, temperature $0.8$, top-$p$ $0.95$. All verification experiments operate on the same frozen rollout pool---no additional inference.
 
-\paragraph{Hyperparameter selection.} The single \ccv{} threshold is selected on the first 300 questions of Geometry3K test (dev split). We use $\tau_{\text{exec}}{=}9$ for both Qwen3.5-9B and Gemma4-E4B; the remaining benchmarks serve as disjoint heldout/OOD evaluation.
+\paragraph{Hyperparameter selection.} The single \ccv{} threshold is selected on the first 300 questions of Geometry3K test (dev split). We use the Qwen-selected $\tau_{\text{exec}}{=}9$ for the main experiments and hold the same threshold fixed for Gemma4-E4B; the remaining benchmarks serve as disjoint heldout/OOD evaluation.
 
 \subsection{Main Results}
 
@@ -365,9 +365,33 @@ Oracle & upper bound & 93.51 & 93.50 & 91.78 & 92.79 & 93.27 \\
 \end{tabular}
 \end{table*}
 
-Table~\ref{tab:main} is the central empirical evidence for our thesis. Seven non-compositional selectors---Claim MV, logprob-weighted MV, CISC, URSA weighted voting, Best-of-$N$, LogReg S-only, and LogReg S+E---all lie in a narrow 69.75--71.39\% band. This includes both self-confidence weighting and an external learned PRM: URSA-RM score-argmax is badly miscalibrated (66.76\%), while answer-cluster weighted voting recovers to 71.33\%, still only $+0.76\pp$ over Claim MV. Execution-only methods improve to 74--76\%, but the large jump appears only when cross-layer agreement is used as a compositional signal: a PROVE-style $\kappa$ filter reaches 79.52\%, and \ccv{} reaches 80.98\%, a $+10.41\pp$ improvement over Claim MV and $+4.80\pp$ over EAV. On the disjoint heldout/OOD split (excluding dev 300), \ccv{} reaches 81.93\%. A sweep over the only tunable parameter, $\tau_{\text{exec}}$, shows that \ccv{} is robust rather than finely tuned: across $\tau_{\text{exec}}=5\ldots14$, dev accuracy varies by 1.00$\pp$ and heldout/OOD accuracy by 1.06$\pp$ (Appendix~\ref{app:tau-sensitivity}).
+Table~\ref{tab:main} is the central empirical evidence for our thesis. Seven non-compositional selectors---Claim MV, logprob-weighted MV, CISC, URSA weighted voting, Best-of-$N$, LogReg S-only, and LogReg S+E---all lie in a narrow 69.75--71.39\% band. This includes both self-confidence weighting and an external learned PRM: URSA-RM score-argmax is badly miscalibrated (66.76\%), while answer-cluster weighted voting recovers to 71.33\%, still only $+0.76\pp$ over Claim MV. Execution-only methods improve to 74--76\%, but the large jump appears only when cross-layer agreement is used as a compositional signal: a PROVE-style $\kappa$ filter reaches 79.52\%, and \ccv{} reaches 80.98\%, a $+10.41\pp$ improvement over Claim MV and $+4.80\pp$ over EAV. On the disjoint heldout/OOD split (excluding dev 300), \ccv{} reaches 81.93\%. A sweep over the only tunable parameter, $\tau_{\text{exec}}$, shows that \ccv{} is robust rather than finely tuned: across $\tau_{\text{exec}}=5\ldots14$, dev accuracy varies by 1.00$\pp$ and heldout/OOD accuracy by 1.06$\pp$ (Appendix~\ref{app:tau-sensitivity}). The $\kappa$ matching threshold itself is also stable: varying the candidate-level relative tolerance around the default leaves \ccv{} accuracy unchanged on the full s240 pool (Appendix~\ref{app:kappa-threshold}).
 
-Appendix~\ref{app:cross-model} validates the same protocol on Gemma4-E4B using the same $\tau_{\text{exec}}{=}9$. There the execution pathway alone is even weaker than the claim pathway (Exec MV 41.08\% vs Claim MV 44.94\%), making EAV ineffective, yet \ccv{} gains $+7.90\pp$ over EAV; this is the regime predicted by Theorem~\ref{thm:snr}, where raw correlated execution votes are noisy but cross-channel agreement remains a high-precision filter.
+\subsection{Cross-Model Generalization}
+\label{sec:cross-model-generalization}
+
+To test whether \ccv{}'s gains depend on the specific base model, we repeat the full evaluation protocol with Gemma4-E4B, a 4B-parameter multimodal model with substantially weaker geometry reasoning capacity. The Gemma4 model achieves comparable \sketch{} format compliance to the Qwen model, so this experiment is a confirmation of the verification mechanism rather than a new generator contribution.
+
+Table~\ref{tab:cross-model} reports the cross-model evidence ladder using the same $\tau_{\text{exec}}{=}9$ for both models. First, the absolute accuracy gap is large: Claim MV drops from 70.57\% on Qwen3.5-9B to 44.94\% on Gemma4-E4B, consistent with the capacity difference. Second, the \ccv{} gain pattern is preserved: \ccv{} improves over Claim MV by $+10.41\pp$ on Qwen and $+7.84\pp$ on Gemma4. The Gemma4 result is especially diagnostic because its execution pathway alone is worse than the claim pathway (Exec MV 41.08\% vs Claim MV 44.94\%), making EAV ineffective (44.88\%). Yet \ccv{} still reaches 52.78\%, showing that it exploits structural cross-channel agreement rather than the raw accuracy advantage of execution votes.
+
+\begin{table}[h]
+\centering
+\caption{Cross-model diagnostic for the precision-filtering mechanism. The $\kappa$-filtered pool is more correlated than the raw execution pool, but its much higher per-candidate precision improves the effective verification signal.}
+\label{tab:cross-model-diagnostics}
+\small
+\resizebox{\linewidth}{!}{
+\begin{tabular}{lccccccc}
+\toprule
+Model & $p_e$ (\%) & $p_\kappa$ (\%) & $\Delta p$ (pp) & $\rho_e$ & $\rho_\kappa$ & mean $K_\kappa$ & SNR raw$\rightarrow\kappa$ \\
+\midrule
+Qwen3.5-9B & 61.70 & 87.10 & $+25.40$ & 0.526 & 0.646 & 9.09 & 0.32$\rightarrow$1.33 \\
+Gemma4-E4B & 33.43 & 59.81 & $+26.38$ & 0.504 & 0.630 & 5.77 & $-$0.48$\rightarrow$0.24 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+The mechanism predicted by Theorem~\ref{thm:accuracy} replicates quantitatively: $\kappa$-filtering yields nearly identical precision gains across models ($+25.40\pp$ vs $+26.38\pp$), and the counterintuitive correlation pattern also repeats ($\rho_\kappa>\rho_e$ while SNR improves). This supports the interpretation that cross-channel precision filtering is model-agnostic. The \ccv{} advantage also scales with $K$ on Gemma4 (Appendix~\ref{app:gemma-k-scaling}).
 
 \subsection{$K$ Scaling Analysis}
 
@@ -428,7 +452,7 @@ Three findings emerge:
 
 \subsection{Error Taxonomy and Recovery Analysis}
 
-We analyze 355 cases where the baseline (EAV) fails but oracle succeeds.
+We analyze 355 cases where the baseline (EAV) fails but oracle succeeds; Figure~\ref{fig:routing-sankey} visualizes the resulting error flow and \ccv{}'s dynamic routing.
 
 \paragraph{Failure classification.}
 Wrong execution consensus accounts for 305/355 = 86\% of failures. Within this dominant category:
@@ -442,6 +466,13 @@ Wrong execution consensus accounts for 305/355 = 86\% of failures. Within this d
 $\kappa$-gating recovers 123/139 = \textbf{88.5\%} of A2$\times$B1 cases---precisely the subtype where the neural pathway (claim) is correct but the symbolic pathway (exec) is corrupted by shared perception error. This is the failure mode that the cross-channel principle predicts should be recoverable: when exec consensus is unreliable, $\kappa$-gating down-weights it in favor of claim-exec agreement.
 
 A2$\times$B2 (both pathways wrong) remains largely unrecoverable (8.3\%), representing the theoretical limit of any selection method operating on the same candidate pool. Breaking through this ceiling requires independent premise verification---generating \emph{new} evidence, not selecting among existing candidates.
+
+\begin{figure*}[t]
+    \centering
+    \includesvg[width=\textwidth,inkscapelatex=false]{figures/figure4}
+    \caption{\textbf{Error flow and dynamic routing.} Among 355 EAV failures with an oracle-correct candidate, wrong execution consensus dominates and splits into A2$\times$B1, A2$\times$B2, and A2$\times$B3 subtypes. In the recoverable A2$\times$B1 stream, the claim majority is correct while the execution majority is wrong; \ccv{}'s $\kappa$ filter routes 123/139 cases (88.5\%) to the correct neural-claim output, illustrating how output-pathway routing rescues samples when the symbolic channel collapses.}
+    \label{fig:routing-sankey}
+\end{figure*}
 
 \paragraph{$\kappa$ reliability stratification.}
 Among self-consistent ($\kappa{=}1$) candidates, accuracy varies sharply with execution cluster size: 19\% for cluster size 1, rising to 93\% for cluster size 8+. This confirms that $\kappa$ alone is not sufficient---it must be combined with within-layer consensus (the $\kappa \times \text{exec\_cluster}$ term) to be reliable, exactly as the \ccv{} scoring formula prescribes.
@@ -475,7 +506,7 @@ PROVE~\cite{prove2024} filters candidates by checking whether a translated Pytho
 Our results suggest a broader principle: \emph{the output format is a verification design choice}. By designing reasoning outputs to contain compositional, cross-validatable pathways, we convert format design into verification capability. This is not geometry-specific: any domain where reasoning can be decomposed into perception, logic, computation, and conclusion---code generation, scientific reasoning, multi-step planning---could benefit from compositional verification. The transferable insight is that structural diversity in outputs creates structural diversity in errors, which creates verification opportunity.
 
 \paragraph{Limitations.}
-(1)~Our experiments use a single base model (9B scale). While OOD generalization across benchmarks and languages is strong, testing with additional model families would strengthen the claims. (2)~The A2$\times$B2 failure mode (both pathways wrong, 43\% of remaining errors) is unrecoverable by any selection method. Breaking this ceiling requires independent premise verification or cross-candidate evidence synthesis. (3)~The theoretical analysis, while supported by strong empirical evidence, is semi-formal; a full probabilistic treatment with tight bounds is left for future work.
+(1)~Our experiments use two base models from related multimodal instruction-tuned families; testing broader model families would further strengthen the claims. (2)~The A2$\times$B2 failure mode (both pathways wrong, 43\% of remaining errors) is unrecoverable by any selection method. Breaking this ceiling requires independent premise verification or cross-candidate evidence synthesis. (3)~The theoretical analysis, while supported by strong empirical evidence, is semi-formal; a full probabilistic treatment with tight bounds is left for future work.
 
 \paragraph{Future directions.}
 The compositional structure enables not only verification but potentially \emph{synthesis}: cross-transplanting the DSL logic of one candidate onto the VGF facts of another could construct correct answers that exist in no single candidate. This moves beyond selection to compositional recombination---a natural extension of the framework that we leave for future investigation.
@@ -555,6 +586,137 @@ Oracle & 93.27 & 91.75 \\
 \end{table}
 
 The notable difference is that Gemma4 reverses the raw pathway ordering: Exec MV is below Claim MV (41.08\% vs 44.94\%), whereas Qwen's execution pathway is stronger than its claim pathway. Consequently, EAV, an execution-first priority rule, is ineffective on Gemma4 (44.88\% vs 44.94\% Claim MV). This pattern is expected for a smaller model with weaker visual grounding: within-layer execution consensus is more easily dominated by correlated perception errors. The result therefore strengthens rather than weakens the verification story. \ccv{} does not trust the raw execution vote; it uses claim--execution agreement as a precision filter. Even when the execution pathway is worse in aggregate, candidates where claim and execution agree remain informative, yielding $+7.84\pp$ over Claim MV and $+7.90\pp$ over EAV on Gemma4.
+
+\section{Gemma4 $K$ Scaling}
+\label{app:gemma-k-scaling}
+
+Table~\ref{tab:gemma-k-scaling} repeats the $K$-scaling analysis on the frozen Gemma4-E4B $K{=}16$ pool by subsampling candidates; $K{<}16$ rows are averaged over four random subsamples. We keep $\tau_{\text{exec}}{=}9$ fixed to match the cross-model comparison in the main text.
+
+\begin{table}[h]
+\centering
+\caption{Gemma4-E4B $K$ scaling from the frozen $K{=}16$ pool. Entries for $K{=}4,8$ are mean$\pm$std over four subsamples.}
+\label{tab:gemma-k-scaling}
+\small
+\resizebox{\linewidth}{!}{
+\begin{tabular}{rccccccc}
+\toprule
+$K$ & Claim MV & Exec MV & EAV & PROVE-style $\kappa$ & \ccv{} & Oracle & \ccv{} $-$ Claim MV \\
+\midrule
+4 & $42.41{\pm}0.81$ & $37.60{\pm}0.42$ & $46.94{\pm}0.46$ & $46.65{\pm}0.74$ & $47.28{\pm}0.60$ & $72.24{\pm}0.60$ & $+4.87$ \\
+8 & $44.00{\pm}0.48$ & $39.86{\pm}0.24$ & $48.82{\pm}0.79$ & $50.04{\pm}0.62$ & $50.85{\pm}0.58$ & $83.84{\pm}0.32$ & $+6.85$ \\
+16 & 44.94 & 41.08 & 44.88 & 51.90 & 52.78 & 91.75 & $+7.84$ \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+The Gemma4 gain increases with candidate budget, from $+4.87\pp$ at $K{=}4$ to $+7.84\pp$ at $K{=}16$, matching the qualitative scaling trend observed for Qwen.
+
+\section{Gemma4 Implementation Details}
+\label{app:gemma-implementation}
+
+The Gemma4-E4B experiment uses the frozen checkpoint-720 LoRA adapter and the frozen rollout pool described in Appendix~\ref{app:cross-model}; no additional model calls are made for the verification comparisons. The adapter uses LoRA rank 8 and $\alpha=16$. On a 400-example format audit, the model reaches 96.0\% complete-section rate, 99.0\% VGF parse success, 96.0\% DSL syntax success, and 94.25\% DSL execution success, comparable to the format reliability of the Qwen model.
+
+\section{$\kappa$ Matching Threshold Sensitivity}
+\label{app:kappa-threshold}
+
+The relation $X_i\approx Y_i$ is implemented by normalizing the claimed final answer and executed DSL answer, then applying numeric tolerance. Floating-point answers, fractions, square roots, and $\pi$ expressions are parsed to real values; degree symbols are treated as unit suffixes and removed before numeric comparison. For multiple-choice questions, numeric answers are first mapped to option letters using the fixed choice tolerance 0.02. In this ablation we keep the numeric absolute tolerance fixed at $10^{-3}$ and sweep only the candidate-level relative tolerance used for $\kappa$.
+
+\begin{table}[h]
+\centering
+\caption{Sensitivity to the candidate-level relative tolerance in $X_i\approx Y_i$ on the frozen Qwen3.5-9B s240 $K{=}16$, $T{=}0.8$ pool.}
+\label{tab:kappa-threshold}
+\small
+\begin{tabular}{lccc}
+\toprule
+Setting & Candidate relative tolerance & \ccv{} accuracy & $\kappa$ candidates / precision \\
+\midrule
+$10^{-6}$ & 0.000001 & 80.98 & 15,535 / 87.07 \\
+$10^{-4}$ & 0.0001 & 80.98 & 15,535 / 87.07 \\
+$10^{-3}$ & 0.001 & 80.98 & 15,535 / 87.07 \\
+default ($10^{-2}$) & 0.01 & 80.98 & 15,535 / 87.07 \\
+$5{\times}10^{-2}$ & 0.05 & 80.98 & 15,535 / 87.07 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+All threshold settings yield identical results because geometry answers are effectively discrete: integers, simple fractions, radicals, angles, or multiple-choice letters. In this domain, claim--execution agreement is almost always binary: pairs either match exactly, or differ by margins much larger than even the loosest tolerance. The matching tolerance is therefore not a meaningful hyperparameter for these benchmarks, and the measured \ccv{} gain is not an artifact of finely tuned numeric equality.
+
+\section{Qualitative Case Studies}
+\label{app:case-studies}
+
+We show one compact example for each requested case type from the frozen Qwen3.5-9B s240 $K{=}16$, $T{=}0.8$ pool.
+
+\paragraph{CCV rescue on A2$\times$B1.}
+Dataset \texttt{geometry3k\_test}, qid 325. Expected answer B, with choices A=12, B=16, C=51, D=65. Claim MV is B, Exec MV and EAV are C, and \ccv{} returns B. \ccv{} selects a correct $\kappa$-consistent claim while EAV follows a wrong execution consensus.
+
+\noindent \textbf{\ccv{} selected output.} Claim B; executed value 16.25 maps to B; $\kappa=1$; claim cluster size 9; execution cluster size 6.
+\begin{verbatim}
+[VGF]
+[{"relation":"equal_angle","entities":["M","Y"]},
+ {"relation":"equal_angle","entities":["L","X"]}]
+[DSL]
+angle_M = 51
+angle_L = 65
+angle_X = angle_L
+x = angle_X / 4
+answer = x
+\end{verbatim}
+
+\noindent \textbf{EAV selected output.} Claim C; executed value 51.0 maps to C; $\kappa=1$; claim cluster size 7; execution cluster size 7.
+\begin{verbatim}
+[VGF]
+[{"relation":"equal_angle","entities":["M","Y"]},
+ {"relation":"equal_angle","entities":["L","X"]}]
+[DSL]
+angle_M = 51
+angle_L = 65
+x = angle_M
+answer = x
+\end{verbatim}
+
+\paragraph{CCV failure on A2$\times$B2.}
+Dataset \texttt{geometry3k\_test}, qid 72. Expected answer A, with choices A=3, B=4, C=6, D=7. Claim MV, Exec MV, EAV, and \ccv{} all return B. \ccv{} cannot rescue the case because the available cross-channel agreement is itself wrong.
+
+\noindent \textbf{\ccv{} selected output.} Claim B; executed value 4.0 maps to B; $\kappa=1$; claim cluster size 15; execution cluster size 15.
+\begin{verbatim}
+[VGF]
+[]
+[DSL]
+x = 4
+answer = x
+\end{verbatim}
+
+\paragraph{Fake $\kappa$.}
+Dataset \texttt{geometry3k\_test}, qid 35. Expected answer D, with choices A=20, B=25, C=30, D=155. Claim MV, Exec MV, EAV, and \ccv{} all return B. The selected candidate has claim and execution agreement, but both agree on the wrong answer. This is the characteristic \ccv{} failure mode: a correlated visual or symbolic error can make both channels self-consistent around the same incorrect answer.
+
+\noindent \textbf{\ccv{} selected output.} Claim B; executed value 25.0 maps to B; $\kappa=1$; claim cluster size 16; execution cluster size 16.
+\begin{verbatim}
+[VGF]
+[]
+[DSL]
+arc_BC = 30
+arc_AD = 20
+angle_2 = (arc_BC + arc_AD) / 2
+answer = angle_2
+\end{verbatim}
+
+\paragraph{Empty $\kappa$ pool with execution fallback.}
+Dataset \texttt{geometry3k\_test}, qid 56. Expected answer C, with choices A=66, B=68, C=70, D=72. Claim MV is D, Exec MV and EAV are C, and \ccv{} returns C. The $\kappa$ pool is empty, so \ccv{} falls back to a large execution cluster that gives the correct answer. This illustrates the value of dual-pathway routing: when self-consistency provides no retained pool, execution-majority fallback can still recover a correct answer.
+
+\noindent \textbf{\ccv{} selected output.} Claim D; executed value 70.0 maps to C; $\kappa=0$; claim cluster size 10; execution cluster size 16.
+\begin{verbatim}
+[VGF]
+[{"relation":"right_triangle","entities":["ABC"]},
+ {"relation":"equal_length","entities":["AB","24"]},
+ {"relation":"equal_length","entities":["BC","74"]}]
+[DSL]
+leg1 = 24
+hypotenuse = 74
+x_squared = hypotenuse**2 - leg1**2
+x = sqrt(x_squared)
+answer = x
+\end{verbatim}
 
 \section{Proofs for the Cross-Channel Verification Analysis}
 \label{app:proofs}
