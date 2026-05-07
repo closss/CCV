@@ -67,6 +67,7 @@
 \usepackage{multirow}
 \usepackage{subcaption}
 \usepackage{wrapfig}
+\usepackage{pifont}
 
 \definecolor{citecolor}{HTML}{0066CC}
 \hypersetup{colorlinks=true, linkcolor=citecolor, citecolor=citecolor, urlcolor=citecolor}
@@ -113,24 +114,24 @@ Multimodal geometry reasoning requires models to jointly perceive diagrams and p
 
 \subsection{The Verification Bottleneck in Geometry Reasoning}
 
-Multimodal geometry reasoning requires models to simultaneously perceive spatial relationships from visual diagrams and perform multi-step symbolic derivations---a conjunction that remains a critical bottleneck for large language models~\cite{gllava,geox,mavis}. The standard approach for improving reasoning accuracy at test time is self-consistency~\cite{wang2023selfconsistency}: sample $K$ candidates and select the most frequent answer via majority voting (MV). This approach rests on the Condorcet assumption that voter errors are approximately independent, so that the majority converges to truth as $K$ grows.
+Geometry reasoning differs from purely textual mathematical tasks in a fundamental way: it requires joint visual perception and symbolic derivation. A model must read spatial relationships from a diagram---angles, parallel lines, congruences---and then chain these percepts through multi-step logical deductions. This conjunction makes geometry a task that current vision-language models find difficult~\cite{gllava,geox,mavis}, and it also creates a distinctive failure mode for test-time verification.
 
-In geometry reasoning, this assumption breaks down in a distinctive way. All $K$ candidates perceive the \emph{same} diagram, and if the vision-language model harbors a systematic perceptual bias---misidentifying a perpendicular relationship as supplementary, or misreading an angle label---then a majority of candidates will share the same error. The votes are not independent draws; they are correlated echoes of a shared perceptual grounding. Formally, when the pairwise error correlation $\rho$ among voters is substantial, the effective sample size degrades as $N_{\text{eff}} = K / (1 + (K{-}1)\rho)$~\cite{ladha1992,nitarach2026}. At $\rho = 0.5$, sixteen candidates carry the information of barely two independent votes.
+The standard approach for improving reasoning accuracy at test time is self-consistency~\cite{wang2023selfconsistency}: sample $K$ candidates and select the most frequent answer via majority voting (MV). This rests on the Condorcet assumption that voter errors are approximately independent, so that the majority converges to truth as $K$ grows. In geometry, this assumption breaks down in a specific and measurable way. All $K$ candidates perceive the \emph{same} diagram, and if the model harbors a systematic perceptual bias---misidentifying a perpendicular as supplementary, or misreading an angle label---then a majority of candidates will share the same error. Votes become correlated because they reflect the same perceptual errors. Formally, when the pairwise error correlation $\rho$ is substantial, the effective sample size degrades as $N_{\text{eff}} = K / (1 + (K{-}1)\rho)$~\cite{ladha1992,nitarach2026}. At $\rho = 0.5$, sixteen candidates carry the information of barely two independent votes.
 
-This is not a hypothetical concern. In our experiments, we observe wrong execution consensus clusters of size 8--16 accounting for 86\% of all verification failures---strong majorities that are \emph{confidently wrong} because they derive from the same misperceived geometric facts.
+In our experiments, wrong execution consensus clusters of size 8--16 account for 86\% of all verification failures---strong majorities that are confidently wrong because they derive from the same misperceived geometric facts.
 
 \subsection{Compositional Structure as a Verification Resource}
 
-We start from a simple but consequential observation: \emph{neuro-symbolic reasoning candidates are not opaque votes.} Unlike standard chain-of-thought outputs---a single text sequence mapping to a single answer---a neuro-symbolic candidate decomposes into layers with distinct computational character:
+Since the problem is within-channel error correlation, a natural response is to seek a structurally independent verification signal. We observe that neuro-symbolic reasoning candidates are not opaque votes. Unlike standard chain-of-thought outputs---a single text sequence mapping to a single answer---a neuro-symbolic candidate decomposes into layers with distinct computational character:
 \begin{equation}
     \text{Candidate} = \big(\underbrace{\text{VGF}}_{\text{perception}},\ \underbrace{\text{DSL}}_{\text{logic}},\ \underbrace{\text{exec}}_{\text{computation}},\ \underbrace{\text{claim}}_{\text{intuition}}\big)
     \label{eq:candidate}
 \end{equation}
 where VGF (Visual Grounding Facts) captures geometric relations extracted from the diagram, DSL is a typed program encoding the reasoning steps, exec is its deterministic execution result, and claim is the model's stated answer.
 
-Crucially, the claim and exec arise from \emph{structurally different pathways}. The claim is produced by the neural pathway---the model's implicit reasoning, subject to the dispersed noise of autoregressive generation. The execution result is produced by the symbolic pathway---a deterministic computation on extracted premises, subject to the correlated noise of shared visual perception. These two pathways have different error correlation structures: neural errors are relatively independent across candidates, while symbolic errors are highly correlated because candidates see the same diagram.
+The claim and exec arise from \emph{structurally different pathways}. The claim is produced by the neural pathway---the model's implicit reasoning, subject to the dispersed noise of autoregressive generation. The execution result is produced by the symbolic pathway---a deterministic computation on extracted premises, subject to the correlated noise of shared visual perception. These two pathways have different error correlation structures: neural errors are relatively independent across candidates, while symbolic errors are highly correlated because candidates see the same diagram.
 
-This structural difference is the key to our approach. We argue that existing verification paradigms overlook it:
+Existing verification paradigms overlook this structural difference:
 
 \begin{itemize}
     \item \textbf{Consensus methods} (MV, self-consistency, CISC) count votes within a single output layer. Whether counting claims or execution results, they are vulnerable to within-layer error correlation.
@@ -145,20 +146,20 @@ We formalize the following principle. Consider two verification channels $C_1$ (
 
 \textbf{Principle (Cross-Channel Verification).} \emph{When within-channel error correlations are high ($\rho_2 \gg 0$), a single instance of cross-channel agreement---one candidate where $C_1$ and $C_2$ independently converge to the same answer---provides stronger evidence for correctness than $k$ instances of within-channel consensus, for any $k$ bounded by the effective sample size $K/(1+(K{-}1)\rho_2)$.}
 
-The intuition is immediate: within-channel consensus can be inflated by shared errors (all candidates misread the same angle), but cross-channel agreement requires two structurally different noise processes to simultaneously produce the same answer. The probability of this occurring by chance is governed by the cross-channel error coupling, which we empirically measure at $P(\text{exec correct} \mid \text{claim correct}) \approx 0.225$---far lower than the within-channel consensus rates, confirming that the two pathways are only weakly coupled.
+Within-channel consensus can be inflated by shared errors (all candidates misread the same angle), but cross-channel agreement requires two structurally different noise processes to simultaneously produce the same answer. The probability of this occurring by chance is governed by the cross-channel error coupling, which we empirically measure at $P(\text{exec correct} \mid \text{claim correct}) \approx 0.225$---far lower than the within-channel consensus rates, confirming that the two pathways are only weakly coupled.
 
 \subsection{Contributions}
 
 We make four contributions:
 
 \begin{enumerate}
-    \item \textbf{\sketch{} format}: A compositional output format that decomposes geometry reasoning into VGF $+$ typed DSL $+$ closed-loop execution $+$ claim. A 9B VLM achieves $>$99.9\% format compliance and $>$94\% execution success after supervised fine-tuning on 2,012 examples.
+    \item \textbf{\sketch{} format}: A compositional output format decomposing geometry reasoning into VGF $+$ typed DSL $+$ execution $+$ claim, achieving $>$99.9\% format compliance and $>$94\% execution success with a 9B VLM fine-tuned on 2,012 examples.
 
-    \item \textbf{\kgated{} dual-pathway \ccv{}}: A training-free, one-parameter verification algorithm that uses cross-channel agreement ($\kappa$) as a two-level gate: (i)~gating which consensus signals to trust during candidate scoring, and (ii)~gating which reasoning pathway---neural or symbolic---supplies the final answer. It achieves $+$10.41$\pp$ over MV across four benchmarks at zero additional cost.
+    \item \textbf{\ccv{}}: A training-free algorithm that uses cross-channel agreement ($\kappa$) to gate both scoring and output selection, achieving $+$10.41$\pp$ over MV across four benchmarks at zero additional inference cost.
 
-    \item \textbf{Verification failure taxonomy}: A systematic analysis of 355 verification failures revealing that 86\% stem from wrong execution consensus due to correlated perception errors, and that $\kappa$-gating recovers 88.5\% of the dominant recoverable failure subtype.
+    \item \textbf{Cross-model validation}: The full protocol transfers to Gemma4-E4B (a different model family) with the same fixed $\tau_{\text{exec}}{=}9$, yielding $+7.84\pp$ over Claim MV and confirming the model-agnostic nature of cross-channel precision filtering.
 
-    \item \textbf{Compositional feature validation}: A learned ablation showing that compositional cross-layer features are the \emph{only} transferable signal source for geometry verification (+8$\pp$ OOD), while standard and execution-channel features provide no gain beyond MV. The hand-designed \ccv{} rule nearly matches the learned optimum, confirming that the compositional structure, not the scorer, does the work.
+    \item \textbf{Systematic analysis}: A verification failure taxonomy (86\% of failures stem from correlated perception errors; $\kappa$-gating recovers 88.5\% of the dominant subtype) and a learned ablation showing compositional cross-layer features are the only transferable verification signal ($+$8$\pp$ OOD), while non-compositional baselines saturate at MV-level performance.
 \end{enumerate}
 
 % ===========================================================================
@@ -168,23 +169,23 @@ We make four contributions:
 
 \subsection{Visual Grounding Facts (VGF)}
 
-VGF is a list of atomic geometric facts extracted from the diagram, using a closed vocabulary of relations:
+For cross-candidate verification to work, visual observations must be comparable across candidates in a structured way. Free-form natural-language descriptions of a diagram are not reliably alignable; two candidates may describe the same geometric relationship with different wording. We therefore represent visual grounding as a list of atomic facts drawn from a closed vocabulary of relations:
 \begin{equation}
     f = (\texttt{relation}, \texttt{entities}), \quad \texttt{relation} \in \{\texttt{parallel}, \texttt{perpendicular}, \texttt{collinear}, \texttt{equal\_angle}, \ldots\}
 \end{equation}
-Each fact is a typed assertion grounding a visual observation in symbolic form. The closed vocabulary ensures parseability and enables cross-candidate comparison.
+The closed vocabulary ensures parseability and enables direct cross-candidate comparison of perceived geometric structure.
 
 \subsection{Typed DSL}
 
-The DSL is a restricted, executable Python subset that derives the answer from VGF-grounded premises using geometry helper functions and standard mathematical operations ($\sqrt{\cdot}$, trigonometric functions, $\pi$, etc.). Every program terminates with an explicit \texttt{answer = ...} assignment, enabling deterministic extraction of the execution result.
+The DSL is a restricted Python subset that derives the answer from VGF-grounded premises using geometry helper functions and standard mathematical operations ($\sqrt{\cdot}$, trigonometric functions, $\pi$, etc.). Restricting the subset---no imports, no I/O, no loops---ensures termination and deterministic execution, which is essential for the symbolic pathway to produce a reliable verification signal. Every program terminates with an explicit \texttt{answer = ...} assignment, so the execution result can be extracted automatically without answer parsing.
 
 \subsection{Closed-Loop Structure}
 
-Each candidate forms a closed loop: VGF provides premises $\rightarrow$ DSL reasons from premises $\rightarrow$ exec produces a deterministic result $\rightarrow$ claim states the model's answer. This loop enables cross-validation: we can check whether claim $\approx$ exec (compositional consistency, $\kappa$), providing a verification signal that is \emph{intrinsic} to the candidate.
+The key property of the \sketch{} format is that each candidate carries an intrinsic verification signal: whether its neural claim agrees with its symbolic execution. This signal exists because the format closes the loop---VGF provides premises $\rightarrow$ DSL reasons from premises $\rightarrow$ exec produces a deterministic result $\rightarrow$ claim states the model's answer. When claim $\approx$ exec (compositional consistency, $\kappa{=}1$), the neural and symbolic pathways have independently converged, providing evidence that the answer is correct without any external reference.
 
 \subsection{Training}
 
-We fine-tune Qwen3.5-9B with LoRA ($r{=}128$, $\alpha{=}256$) on 2,012 geometry examples distilled from the Geometry3K training split. Distillation proceeds in two stages: (i)~frontier model CoT generation (Qwen3-VL-235B-A22B-Thinking), (ii)~text-only reformatting to VGF+DSL structure (DeepSeek V4 Pro, zero vision API cost). The resulting model achieves format compliance $>$99.9\%, VGF parse success $>$98.7\%, and DSL execution success $>$94.5\% on test data.
+We fine-tune Qwen3.5-9B with LoRA ($r{=}8$, $\alpha{=}16$) on 2,012 geometry examples derived from the Geometry3K~\cite{lu2021intergps} training split. We use the geometry3k subset of NVIDIA Nemotron-Image-Training-v3~\cite{nvidia2024nemotron3}, which provides 2,078 CoT annotations generated by Qwen3-VL-235B-A22B-Thinking for the Geometry3K training split. Each CoT trace is then reformatted into VGF+DSL structure by DeepSeek V4 Pro in a text-only pass (zero vision API cost). Of the 2,078 reformatted examples, 2,012 pass executor validation after VGF normalization and DSL sanitization (96.82\% pass rate). Appendix~\ref{app:data-construction} gives the full filtering breakdown, and Appendix~\ref{app:prompts} lists the prompt templates. The resulting model achieves format compliance $>$99.9\%, VGF parse success $>$98.7\%, and DSL execution success $>$94.5\% on test data.
 
 % ===========================================================================
 \section{Compositional Consensus Verification}
@@ -203,22 +204,21 @@ Given $K$ candidates $\{c_1, \ldots, c_K\}$, each decomposed as $c_i = (\text{VG
 \end{align}
 Traditional MV selects $\arg\max_z S_{\text{claim}}(z)$. Execution MV selects $\arg\max_z S_{\text{exec}}(z)$.
 
-\paragraph{Level 2: Cross-layer agreement.} Signals that compare outputs across structurally different layers:
-\begin{align}
-    \kappa_i &= \mathbf{1}[\text{claim}_i \approx \text{exec}_i \wedge \text{exec}_i \neq \bot] & \text{(compositional consistency)} \\
-    \mu_i &= \mathbf{1}[\text{exec}_i = \text{mode}(\text{claim})] & \text{(cross-candidate cross-layer)}
-\end{align}
-$\kappa$ checks whether a single candidate's neural and symbolic pathways agree; $\mu$ checks whether a candidate's symbolic output confirms the crowd's neural consensus.
+\paragraph{Level 2: Cross-layer agreement.} Signals that compare outputs across structurally different layers. The core signal is compositional consistency:
+\begin{equation}
+    \kappa_i = \mathbf{1}[\text{claim}_i \approx \text{exec}_i \wedge \text{exec}_i \neq \bot],
+\end{equation}
+which checks whether a single candidate's neural and symbolic pathways agree. Additional cross-layer features (e.g., cross-candidate cross-layer agreement $\mu_i$) appear in the learned ablation (Section~\ref{sec:learned}) but are not part of the hand-designed algorithm.
 
 \paragraph{Level 3: Agreement-gated consensus.} Cross-layer agreement gates within-layer consensus:
 \begin{equation}
     G_\kappa(z) = \sum_i \mathbf{1}[\text{exec}_i = z] \cdot \kappa_i
 \end{equation}
-Only execution votes from self-consistent candidates count. This is the core compositional signal.
+Only execution votes from self-consistent candidates count. This is the signal that \ccv{}'s scoring function is built on.
 
 \subsection{The Cross-Channel Verification Advantage}
 
-We provide a formal motivation for why gated consensus outperforms raw consensus. For notational simplicity, this subsection writes claim--exec agreement as equality; in implementation, $\kappa_i$ uses approximate numeric matching and excludes failed executions.
+For notational simplicity, this subsection writes claim--exec agreement as equality; in implementation, $\kappa_i$ uses approximate numeric matching and excludes failed executions.
 
 \begin{theorem}[Cross-channel agreement as a precision filter]
 \label{thm:accuracy}
@@ -233,26 +233,16 @@ The theorem isolates the central mechanism: $\kappa$-gating is primarily a \emph
 
 \begin{theorem}[One-vs-rest SNR approximation]
 \label{thm:snr}
-Condition on a retained pool of size $K_\kappa$ and assume $p_e,p_\kappa>1/2$. In a one-vs-rest binary correctness approximation, majority reliability has signal-to-noise ratio
+In a one-vs-rest binary correctness approximation, majority reliability depends on per-vote accuracy $p$, pool size $n$, and pairwise correctness correlation $\rho$ through
 \begin{equation}
-    \mathrm{SNR}(p,n,\rho)=\frac{p-\tfrac{1}{2}}{\sqrt{p(1-p)(1+(n-1)\rho)/n}},
+    \mathrm{SNR}(p,n,\rho)=\frac{p-\tfrac{1}{2}}{\sqrt{p(1-p)(1+(n-1)\rho)/n}}.
 \end{equation}
-where $p$ is per-vote accuracy and $\rho$ is pairwise correctness correlation. The $\kappa$-filtered pool improves over raw exec voting whenever
-\begin{equation}
-    \frac{p_\kappa - \tfrac{1}{2}}{p_e - \tfrac{1}{2}}
-    >
-    \sqrt{
-    \frac{p_\kappa(1-p_\kappa)}{p_e(1-p_e)}
-    \cdot
-    \frac{K(1+(K_\kappa-1)\rho_\kappa)}{K_\kappa(1+(K-1)\rho_e)}
-    }.
-    \label{eq:snr_condition}
-\end{equation}
+The $\kappa$-filtered pool improves over raw exec voting whenever the precision gain from filtering outweighs the combined penalty of smaller pool size and higher correlation (full condition in Appendix~\ref{app:proofs}).
 \end{theorem}
 
-Importantly, condition~\eqref{eq:snr_condition} can be satisfied even when $\rho_\kappa>\rho_e$: the accuracy boost from precision filtering can dominate the noise penalty from a smaller or more correlated retained pool. This gives a testable, counterintuitive prediction: $\kappa$-gating need not reduce correlation to improve majority reliability. This makes our story complementary to negative results on diverse prompting~\cite{nitarach2026}: when errors arise from shared perception, trying to decorrelate samples may be the wrong lever; gating consensus through cross-channel agreement targets precision directly.
+This yields a testable, counterintuitive prediction: $\kappa$-gating need not reduce correlation to improve majority reliability. Precision filtering can dominate the correlation penalty. This complements the negative findings of \cite{nitarach2026} on diverse prompting: when errors arise from shared perception, decorrelating samples is the wrong lever---filtering for cross-channel agreement targets precision directly.
 
-\textbf{Empirical support.} We directly measure within-question correctness correlations on the full dataset (1,709 questions $\times$ 16 candidates). Raw exec votes have pairwise correlation $\rho_e=0.526$; $\kappa$-filtered votes have higher correlation $\rho_\kappa=0.646$. Yet per-candidate accuracy jumps from 61.7\% to 87.1\%, and the one-vs-rest SNR proxy improves by $4.1\times$ (0.32 to 1.33). Thus the retained pool is more correlated, but substantially more reliable. This confirms that the dominant mechanism is precision filtering, not decorrelation: the $\kappa_i\cdot|\text{exec\_cluster}_i|$ term in Algorithm~\ref{alg:ccv} counts consensus only after it has survived cross-channel agreement.
+\textbf{Empirical support.} We directly measure within-question correctness correlations on the full dataset (1,709 questions $\times$ 16 candidates). Raw exec votes have pairwise correlation $\rho_e=0.526$; $\kappa$-filtered votes have higher correlation $\rho_\kappa=0.646$. Yet per-candidate accuracy jumps from 61.7\% to 87.1\%, and the one-vs-rest SNR proxy improves by $4.1\times$ (0.32 to 1.33). Thus the retained pool is more correlated, but substantially more reliable---directly validating the counterintuitive prediction of Theorem~\ref{thm:snr}: precision filtering dominates even when it increases correlation. This confirms that the dominant mechanism is precision filtering, not decorrelation: the $\kappa_i\cdot|\text{exec\_cluster}_i|$ term in Algorithm~\ref{alg:ccv} counts consensus only after it has survived cross-channel agreement.
 
 \begin{figure}[t]
     \centering
@@ -286,13 +276,13 @@ We combine the verification signals into a two-level gating algorithm:
     \ENDIF
 \ENDIF
 \end{algorithmic}
-\end{algorithm}
+ \end{algorithm}
 
-The algorithm embodies the cross-channel principle at two levels:
+The algorithm applies cross-channel agreement as a gate at two levels:
 
-\textbf{Candidate scoring (Lines 2--3).} The term $\kappa_i \cdot |\text{exec\_cluster}_i|$ realizes agreement-gated consensus: execution consensus is trusted only when accompanied by cross-layer agreement. The term $0.5 \cdot |\text{claim\_cluster}|$ provides a baseline surface signal. Raw execution cluster size receives zero weight---our learned ablation confirms this is correct (its learned coefficient is \emph{negative} when the gated term is present).
+\textbf{Candidate scoring (Lines 2--3).} The term $\kappa_i \cdot |\text{exec\_cluster}_i|$ realizes agreement-gated consensus: execution consensus is trusted only when accompanied by cross-layer agreement. The term $0.5 \cdot |\text{claim\_cluster}|$ provides a baseline surface signal. Raw execution cluster size receives zero weight---our learned ablation in Section~\ref{sec:learned} confirms this design choice.
 
-\textbf{Output pathway routing (Lines 6--12).} When self-consistent candidates exist ($\kappa$-pool is non-empty), the algorithm outputs the neural claim. When cross-layer agreement collapses globally, it falls back to symbolic execution consensus, but only if the execution cluster is sufficiently large ($\geq \tau_{\text{exec}}$). This routing treats the \emph{absence} of cross-channel agreement as diagnostic: it signals that the neural pathway is unreliable, making the deterministic symbolic pathway the safer bet.
+\textbf{Output pathway routing (Lines 6--12).} When self-consistent candidates exist ($\kappa$-pool is non-empty), the algorithm outputs the neural claim. When cross-layer agreement collapses globally, it falls back to symbolic execution consensus, but only if the execution cluster is sufficiently large ($\geq \tau_{\text{exec}}$). This routing treats the \emph{absence} of cross-channel agreement as diagnostic: it signals that the neural pathway is unreliable, making the deterministic symbolic pathway more trustworthy.
 
 \textbf{Complexity.} $O(K)$ time, zero additional model calls, one tunable parameter ($\tau_{\text{exec}}$).
 
@@ -303,9 +293,11 @@ The algorithm embodies the cross-channel principle at two levels:
 
 \subsection{Setup}
 
-\paragraph{Model.} Qwen3.5-9B $+$ LoRA SFT (checkpoint-240, $\sim$2.9 epochs).
+\paragraph{Model.} Qwen3.5-9B $+$ LoRA SFT (checkpoint-240, $\sim$3.8 epochs).
 
-\paragraph{Training data.} 2,012 Geometry3K train examples (frontier CoT $\rightarrow$ VGF+DSL reformat, executor-validated).
+\paragraph{Training data.} 2,012 Geometry3K train examples (frontier CoT $\rightarrow$ VGF+DSL reformat, executor-validated). Appendix~\ref{app:data-construction} reports the construction pipeline and filter counts.
+
+\paragraph{Training implementation.} SFT uses LLaMA-Factory with bf16 distributed training on 8 NVIDIA GeForce RTX 4090 GPUs. The run uses LoRA rank 8, $\alpha=16$, learning rate $10^{-4}$, cutoff length 1536, per-device batch size 1, gradient accumulation 4, and 720 maximum steps; checkpoint-240 is selected for evaluation.
 
 \paragraph{Test benchmarks.} Four benchmarks with zero training overlap (verified by 13-gram, embedding cosine, and image perceptual hash):
 
@@ -316,13 +308,15 @@ The algorithm embodies the cross-channel principle at two levels:
 \toprule
 Benchmark & Lang & $N$ & Role \\
 \midrule
-Geometry3K test & EN & 601 & In-distribution \\
-GeoQA test & ZH & 754 & Cross-lingual OOD \\
-MathVista-GPS clean & EN & 146 & Cross-domain OOD \\
-MathVista-GPS & EN & 208 & Reference (has overlap) \\
+Geometry3K test~\cite{lu2021intergps} & EN & 601 & In-distribution \\
+GeoQA test~\cite{chen2021geoqa} & ZH & 754 & Cross-lingual OOD \\
+MathVista-GPS clean~\cite{lu2024mathvista} & EN & 146 & Cross-domain OOD \\
+MathVista-GPS~\cite{lu2024mathvista} & EN & 208 & Reference$^\dagger$ \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+{\footnotesize $^\dagger$Included for comparability with prior work; all conclusions are drawn from the overlap-free benchmarks.}
 
 \paragraph{Sampling.} $K{=}16$, temperature $0.8$, top-$p$ $0.95$. All verification experiments operate on the same frozen rollout pool---no additional inference.
 
@@ -333,7 +327,7 @@ MathVista-GPS & EN & 208 & Reference (has overlap) \\
 \begin{figure}[t]
     \centering
     \includesvg[width=\linewidth,inkscapelatex=false]{figures/figure3}
-    \caption{\textbf{Evidence ladder and scaling law.} Surface and confidence-based selectors cluster near 70--71\%, execution-only methods improve moderately, and cross-layer compositional verification produces the main jump to 79--81\%. As $K$ increases, the \ccv{} gain over Claim MV grows, indicating that compositional verification unlocks additional rollout diversity.}
+    \caption{\textbf{Evidence ladder and $K$ scaling.} Surface and confidence-based selectors cluster near 70--71\%, execution-only methods improve moderately, and cross-layer compositional verification produces the main jump to 79--81\%. As $K$ increases, the \ccv{} gain over Claim MV grows, indicating that compositional verification unlocks additional rollout diversity.}
     \label{fig:evidence-scaling}
 \end{figure}
 
@@ -365,7 +359,7 @@ Oracle & upper bound & 93.51 & 93.50 & 91.78 & 92.79 & 93.27 \\
 \end{tabular}
 \end{table*}
 
-Table~\ref{tab:main} is the central empirical evidence for our thesis. Seven non-compositional selectors---Claim MV, logprob-weighted MV, CISC, URSA weighted voting, Best-of-$N$, LogReg S-only, and LogReg S+E---all lie in a narrow 69.75--71.39\% band. This includes both self-confidence weighting and an external learned PRM: URSA-RM score-argmax is badly miscalibrated (66.76\%), while answer-cluster weighted voting recovers to 71.33\%, still only $+0.76\pp$ over Claim MV. Execution-only methods improve to 74--76\%, but the large jump appears only when cross-layer agreement is used as a compositional signal: a PROVE-style $\kappa$ filter reaches 79.52\%, and \ccv{} reaches 80.98\%, a $+10.41\pp$ improvement over Claim MV and $+4.80\pp$ over EAV. On the disjoint heldout/OOD split (excluding dev 300), \ccv{} reaches 81.93\%. A sweep over the only tunable parameter, $\tau_{\text{exec}}$, shows that \ccv{} is robust rather than finely tuned: across $\tau_{\text{exec}}=5\ldots14$, dev accuracy varies by 1.00$\pp$ and heldout/OOD accuracy by 1.06$\pp$ (Appendix~\ref{app:tau-sensitivity}). The $\kappa$ matching threshold itself is also stable: varying the candidate-level relative tolerance around the default leaves \ccv{} accuracy unchanged on the full s240 pool (Appendix~\ref{app:kappa-threshold}).
+Table~\ref{tab:main} reports the full evidence ladder. The four surface and confidence-based selectors---Claim MV, logprob-weighted MV, CISC, and URSA-RM weighted MV---all lie in a narrow 70.57--71.39\% band, despite spanning self-confidence weighting and an external learned PRM. The learned ablation in Section~\ref{sec:learned} confirms this ceiling extends to logprob-based best-of-$N$ and learned surface+execution feature selectors. Even URSA-RM, the strongest external scorer, achieves only $+0.76\pp$ over Claim MV when used for weighted voting. Execution-only methods improve to 74--76\%, but the large jump appears only when cross-layer agreement is used as a compositional signal: a PROVE-style $\kappa$ filter reaches 79.52\%, and \ccv{} reaches 80.98\%, a $+10.41\pp$ improvement over Claim MV and $+4.80\pp$ over EAV. On the disjoint heldout/OOD split (excluding dev 300), \ccv{} reaches 81.93\%. A sweep over the only tunable parameter, $\tau_{\text{exec}}$, shows that \ccv{} is robust rather than finely tuned: across $\tau_{\text{exec}}=5\ldots14$, dev accuracy varies by 1.00$\pp$ and heldout/OOD accuracy by 1.06$\pp$ (Appendix~\ref{app:tau-sensitivity}). The $\kappa$ matching threshold itself is also stable: varying the candidate-level relative tolerance around the default leaves \ccv{} accuracy unchanged on the full s240 pool (Appendix~\ref{app:kappa-threshold}).
 
 \subsection{Cross-Model Generalization}
 \label{sec:cross-model-generalization}
@@ -391,7 +385,7 @@ Gemma4-E4B & 33.43 & 59.81 & $+26.38$ & 0.504 & 0.630 & 5.77 & $-$0.48$\rightarr
 }
 \end{table}
 
-The mechanism predicted by Theorem~\ref{thm:accuracy} replicates quantitatively: $\kappa$-filtering yields nearly identical precision gains across models ($+25.40\pp$ vs $+26.38\pp$), and the counterintuitive correlation pattern also repeats ($\rho_\kappa>\rho_e$ while SNR improves). This supports the interpretation that cross-channel precision filtering is model-agnostic. The \ccv{} advantage also scales with $K$ on Gemma4 (Appendix~\ref{app:gemma-k-scaling}).
+The mechanism predicted by Theorem~\ref{thm:accuracy} replicates quantitatively: $\kappa$-filtering yields nearly identical precision gains across models ($+25.40\pp$ vs $+26.38\pp$), and the counterintuitive correlation pattern also repeats ($\rho_\kappa>\rho_e$ while SNR improves). The negative raw SNR for Gemma4 reflects that its per-candidate execution accuracy (33.4\%) is below chance in the one-vs-rest approximation, yet $\kappa$-filtering still lifts it above the decision boundary. This supports the interpretation that cross-channel precision filtering is model-agnostic. The \ccv{} advantage also scales with $K$ on Gemma4 (Appendix~\ref{app:gemma-k-scaling}).
 
 \subsection{$K$ Scaling Analysis}
 
@@ -413,7 +407,7 @@ $K$ & Claim MV & Exec MV & \ccv{} & Oracle & \ccv{} $-$ Claim MV \\
 
 The \ccv{} advantage scales with $K$: the gain over Claim MV grows from $+$5.60$\pp$ at $K{=}4$ to $+$10.41$\pp$ at $K{=}16$. Surface consensus saturates quickly (Claim MV gains only $+$1.23$\pp$ from $K{=}4$ to 16), while compositional verification continues extracting signal from larger candidate pools.
 
-As a negative control, VGF consensus---another within-layer signal---not only fails to help but \emph{hurts} performance when added (from 80.05\% to 79.93\%). This reinforces the central finding: within-layer consensus, regardless of which layer, is vulnerable to correlated perception errors. Only cross-layer gating provides robust verification signal.
+As a negative control, VGF consensus---another within-layer signal---not only fails to help but \emph{hurts} performance when added (from 80.05\% to 79.93\%). This reinforces the central finding: within-layer consensus---whether the layer is claim, execution, or VGF---is vulnerable to correlated perception errors. Only cross-layer gating provides robust verification signal.
 
 \subsection{Learned Feature Ablation}
 \label{sec:learned}
@@ -446,7 +440,7 @@ Three findings emerge:
 
 \textbf{(1) Compositional features are the sole source of transferable signal.} Standard logprob-based selectors and learned surface/exec features are essentially equivalent to Claim MV: Best-of-$N$ is worse (71.11\% OOD), LogReg S-only gives only $+0.08\pp$, and adding execution features without compositional agreement does not help (71.86$\rightarrow$71.69). Adding compositional features produces a $+$8$\pp$ jump (71.69$\rightarrow$79.85), and using \emph{only} compositional features matches full-feature performance.
 
-\textbf{(2) The learned model independently discovers the gating principle.} Standardized logistic coefficients reveal: \texttt{exec\_cluster\_size} has a \emph{negative} coefficient ($-$2.40), while \texttt{$\kappa$ $\times$ exec\_cluster} has a strongly \emph{positive} coefficient ($+$1.96). The data confirms what our theory predicts: raw execution consensus is noise; gated execution consensus is signal.
+\textbf{(2) The learned model independently discovers the gating principle.} Standardized logistic coefficients reveal that $\text{exec\_cluster\_size}$ has a \emph{negative} coefficient ($-2.40$), while $\kappa \times \text{exec\_cluster}$ has a strongly \emph{positive} coefficient ($+1.96$). The data confirms what our theory predicts: raw execution consensus is noise; gated execution consensus is signal.
 
 \textbf{(3) The hand-designed rule is near-optimal.} A PROVE-style binary $\kappa$ filter already reaches 81.02\% OOD accuracy, showing that cross-layer agreement alone is a strong verifier. Dual-output \ccv{} (80.98\% all, 81.93\% OOD) further improves over this filter by using agreement-gated consensus and output-pathway routing. More expressive models (MLP) overfit to dev without OOD gains. This confirms that the compositional structure does the heavy lifting---the specific scorer matters less than the features it operates on.
 
@@ -455,22 +449,23 @@ Three findings emerge:
 We analyze 355 cases where the baseline (EAV) fails but oracle succeeds; Figure~\ref{fig:routing-sankey} visualizes the resulting error flow and \ccv{}'s dynamic routing.
 
 \paragraph{Failure classification.}
-Wrong execution consensus accounts for 305/355 = 86\% of failures. Within this dominant category:
+Wrong execution consensus accounts for 305/355 = 86\% of failures, which split into three subtypes:
 \begin{itemize}
-    \item A2$\times$B1 (claim majority correct, exec majority wrong): 139 cases (45.6\%)
-    \item A2$\times$B2 (both majorities wrong): 132 cases (43.3\%)
-    \item A2$\times$B3 (claim dispersed): 34 cases (11.1\%)
+    \item \textbf{Exec\ding{55}\,Claim\ding{51}} (exec majority wrong, claim majority correct): 139 cases (45.6\%)
+    \item \textbf{Exec\ding{55}\,Claim\ding{55}} (both majorities wrong): 132 cases (43.3\%)
+    \item \textbf{Exec\ding{55}\,Claim?} (exec majority wrong, claim dispersed): 34 cases (11.1\%)
 \end{itemize}
+The remaining 50 cases (14\%) involve correct execution with other error patterns.
 
 \paragraph{Recovery by \ccv{}.}
-$\kappa$-gating recovers 123/139 = \textbf{88.5\%} of A2$\times$B1 cases---precisely the subtype where the neural pathway (claim) is correct but the symbolic pathway (exec) is corrupted by shared perception error. This is the failure mode that the cross-channel principle predicts should be recoverable: when exec consensus is unreliable, $\kappa$-gating down-weights it in favor of claim-exec agreement.
+$\kappa$-gating recovers 123/139 = \textbf{88.5\%} of Exec\ding{55}\,Claim\ding{51} cases---precisely the subtype where the neural pathway is correct but the symbolic pathway is corrupted by shared perception error. This is the failure mode that the cross-channel principle predicts should be recoverable: when exec consensus is unreliable, $\kappa$-gating down-weights it in favor of claim-exec agreement.
 
-A2$\times$B2 (both pathways wrong) remains largely unrecoverable (8.3\%), representing the theoretical limit of any selection method operating on the same candidate pool. Breaking through this ceiling requires independent premise verification---generating \emph{new} evidence, not selecting among existing candidates.
+Exec\ding{55}\,Claim\ding{55} (both pathways wrong) remains largely unrecoverable (8.3\%), representing the theoretical limit of any selection method operating on the same candidate pool. Breaking through this ceiling requires independent premise verification---generating \emph{new} evidence, not selecting among existing candidates.
 
 \begin{figure*}[t]
     \centering
     \includesvg[width=\textwidth,inkscapelatex=false]{figures/figure4}
-    \caption{\textbf{Error flow and dynamic routing.} Among 355 EAV failures with an oracle-correct candidate, wrong execution consensus dominates and splits into A2$\times$B1, A2$\times$B2, and A2$\times$B3 subtypes. In the recoverable A2$\times$B1 stream, the claim majority is correct while the execution majority is wrong; \ccv{}'s $\kappa$ filter routes 123/139 cases (88.5\%) to the correct neural-claim output, illustrating how output-pathway routing rescues samples when the symbolic channel collapses.}
+    \caption{\textbf{Error flow and dynamic routing.} Among 355 EAV failures with an oracle-correct candidate, wrong execution consensus dominates (86\%) and splits into three subtypes: Exec{\ding{55}}\,Claim{\ding{51}}, Exec{\ding{55}}\,Claim{\ding{55}}, and Exec{\ding{55}}\,Claim?. In the recoverable Exec{\ding{55}}\,Claim{\ding{51}} stream, the claim majority is correct while the execution majority is wrong; \ccv{}'s $\kappa$ filter routes 123/139 cases (88.5\%) to the correct neural-claim output, illustrating how output-pathway routing rescues samples when the symbolic channel collapses.}
     \label{fig:routing-sankey}
 \end{figure*}
 
@@ -483,16 +478,19 @@ Among self-consistent ($\kappa{=}1$) candidates, accuracy varies sharply with ex
 % ===========================================================================
 
 \paragraph{Multimodal geometry reasoning.}
-Recent work has developed specialized VLMs for geometry, including G-LLaVA~\cite{gllava}, GeoX~\cite{geox}, and MAVIS~\cite{mavis}. AlphaGeometry~\cite{alphageometry,alphageometry2} combines a symbolic geometry engine with a neural proposer. FormalGeo~\cite{formalgeo} develops a complete formal geometry solver. These works focus on improving the \emph{generator}; our work is orthogonal, focusing on \emph{verification} of generated candidates.
+Recent work has developed specialized VLMs for geometry, including G-LLaVA~\cite{gllava}, GeoX~\cite{geox}, and MAVIS~\cite{mavis}. AlphaGeometry~\cite{alphageometry,alphageometry2} combines a symbolic geometry engine with a neural proposer. FormalGeo~\cite{formalgeo} develops a complete formal geometry solver. Key benchmarks include Geometry3K~\cite{lu2021intergps} and GeoQA~\cite{chen2021geoqa}. These works focus on improving the \emph{generator}; our work improves post-hoc \emph{verification} of generated candidates and is complementary to stronger generators.
 
 \paragraph{Test-time consensus methods.}
-Self-consistency~\cite{wang2023selfconsistency} established majority voting as the standard for test-time verification. Universal self-consistency~\cite{chen2023universal} extends this to open-ended generation. CISC~\cite{cisc2025} uses model confidence to weight votes, reducing sample requirements. These methods treat candidates as opaque votes; \sketch{} exploits their internal compositional structure.
+Self-consistency~\cite{wang2023selfconsistency} established majority voting as the standard for test-time verification. Universal self-consistency~\cite{chen2023universal} extends this to open-ended generation. CISC~\cite{cisc2025} uses model confidence to weight votes, reducing sample requirements. These methods treat candidates as opaque votes; \ccv{} exploits their internal compositional structure.
 
 \paragraph{Learned verification.}
-Outcome reward models (ORM;~\cite{cobbe2021,uesato2022}) and process reward models (PRM;~\cite{lightman2023,mathshepherd}) train external scorers. GenRM~\cite{genrm2024} frames verification as generative next-token prediction. URSA-RM~\cite{ursa2025} and VisualPRM~\cite{visualprm2025} extend PRMs to multimodal math. Our learned ablation shows that these models' standard features (logprob, sequence-level scores) provide no OOD gain for geometry verification without compositional cross-layer features.
+Outcome reward models (ORM;~\cite{cobbe2021,uesato2022}) and process reward models (PRM;~\cite{lightman2023,mathshepherd}) train external scorers. GenRM~\cite{genrm2024} frames verification as generative next-token prediction. URSA-RM~\cite{ursa2025} and VisualPRM~\cite{visualprm2025} extend PRMs to multimodal math. Our work differs in that it derives verification signal from the candidate's internal structure rather than from an external scorer, requiring no additional training data or inference cost.
 
 \paragraph{Program-aided verification.}
-PROVE~\cite{prove2024} filters candidates by checking whether a translated Python program's output matches the natural language answer---a binary consistency check analogous to our $\kappa$. Our framework generalizes this: $\kappa$ is one signal within a multi-level hierarchy that includes $\mu$ (cross-candidate cross-layer), agreement-gated consensus, and output pathway routing. Moreover, \sketch{}'s typed DSL and VGF provide richer structure than PROVE's post-hoc program translation.
+PROVE~\cite{prove2024} filters candidates by checking whether a translated Python program's output matches the natural language answer---a binary consistency check analogous to our $\kappa$. Our framework generalizes this: $\kappa$ is one signal within a multi-level hierarchy that includes $\mu$ (cross-candidate cross-layer), agreement-gated consensus, and output pathway routing. Moreover, \sketch{}'s typed DSL and VGF provide richer structure for geometry specifically, while PROVE's approach is more general-purpose.
+
+\paragraph{Neuro-symbolic structure.}
+Our \sketch{} format is a neuro-symbolic decomposition---neural claim paired with symbolic execution. The broader neuro-symbolic reasoning literature~\cite{alphageometry,formalgeo} uses symbolic pathways for proof or derivation; our contribution is not the neuro-symbolic format itself, but the insight that its compositional structure can serve as a verification resource through cross-channel agreement.
 
 \paragraph{Correlated errors in LLM voting.}
 \citet{nitarach2026} empirically demonstrates that correlated errors limit effective sample size in LLM majority voting, finding that diverse prompts do not help because high-temperature sampling already provides sufficient decorrelation. Our work identifies a different solution: rather than attempting to decorrelate votes, we \emph{gate} consensus through cross-channel agreement. Empirically, our retained $\kappa$-filtered pool is more correlated than the raw exec pool, yet achieves higher SNR because the individual retained votes are much more precise.
@@ -503,19 +501,19 @@ PROVE~\cite{prove2024} filters candidates by checking whether a translated Pytho
 % ===========================================================================
 
 \paragraph{Output format as verification design.}
-Our results suggest a broader principle: \emph{the output format is a verification design choice}. By designing reasoning outputs to contain compositional, cross-validatable pathways, we convert format design into verification capability. This is not geometry-specific: any domain where reasoning can be decomposed into perception, logic, computation, and conclusion---code generation, scientific reasoning, multi-step planning---could benefit from compositional verification. The transferable insight is that structural diversity in outputs creates structural diversity in errors, which creates verification opportunity.
+Our results suggest a broader principle: \emph{the output format is a verification design choice}. By designing reasoning outputs to contain compositional, cross-validatable pathways, we convert format design into verification capability. While we have not validated this beyond geometry, the underlying mechanism---cross-channel agreement between structurally independent pathways---does not depend on geometric properties per se; any domain where reasoning can be decomposed into perception, logic, computation, and conclusion could benefit from compositional verification. The core insight is that structural diversity in outputs creates structural diversity in errors, which creates verification opportunity.
 
 \paragraph{Limitations.}
-(1)~Our experiments use two base models from related multimodal instruction-tuned families; testing broader model families would further strengthen the claims. (2)~The A2$\times$B2 failure mode (both pathways wrong, 43\% of remaining errors) is unrecoverable by any selection method. Breaking this ceiling requires independent premise verification or cross-candidate evidence synthesis. (3)~The theoretical analysis, while supported by strong empirical evidence, is semi-formal; a full probabilistic treatment with tight bounds is left for future work.
+(1)~Our experiments validate \ccv{} on two open-weight multimodal models (9B and 4B) in a moderate-accuracy geometry regime. The underlying mechanism---correlated perception errors from shared visual input---is not specific to model scale, and visual grounding failures persist across multimodal model families; however, we do not empirically validate proprietary frontier systems such as GPT-4o or Claude. If single-sample accuracy approaches oracle levels, the need for test-time verification diminishes regardless of method. (2)~The Exec\ding{55}\,Claim\ding{55} failure mode (both pathways wrong, 43\% of remaining errors) is unrecoverable by any selection method. Breaking this ceiling requires compositional recombination---e.g., cross-transplanting the DSL logic of one candidate onto the VGF facts of another---rather than selection among existing candidates. (3)~The theoretical analysis, while supported by strong empirical evidence, is semi-formal; a full probabilistic treatment with tight bounds is left for future work.
 
 \paragraph{Future directions.}
-The compositional structure enables not only verification but potentially \emph{synthesis}: cross-transplanting the DSL logic of one candidate onto the VGF facts of another could construct correct answers that exist in no single candidate. This moves beyond selection to compositional recombination---a natural extension of the framework that we leave for future investigation.
+The compositional structure enables not only verification but potentially \emph{synthesis}: generating new evidence from structural recombination of existing candidates. Extending the validation to proprietary frontier models, scaling to other neuro-symbolic domains (code generation, scientific reasoning), and moving from selection to synthesis are natural next steps.
 
 % ===========================================================================
 \section{Conclusion}
 % ===========================================================================
 
-We have shown that neuro-symbolic reasoning candidates carry an underutilized verification resource: their compositional structure. By decomposing candidates into perception, logic, computation, and intuition layers, and by formalizing cross-channel agreement as a verification principle, we derive a training-free algorithm that achieves substantial gains over both consensus methods and the implicit assumptions of learned verifiers. The key insight---that agreement between structurally diverse pathways trumps repetition within any single pathway---is grounded in the error correlation structure of shared-perception reasoning, validated by systematic error taxonomy, and confirmed by a full evidence ladder: non-compositional confidence, consensus, and learned-score methods saturate around 70--71\%, while $\kappa$-based compositional methods reach 79--81\%. We hope this work encourages the community to view output format design not just as a usability choice, but as a first-class verification decision.
+We have shown that neuro-symbolic reasoning candidates carry an underutilized verification resource: their compositional structure. By formalizing cross-channel agreement as a verification principle, we derive a training-free algorithm that substantially outperforms both standard consensus methods and learned verifiers. The key insight---that agreement between structurally diverse pathways provides stronger evidence than repetition within any single pathway---is grounded in the error correlation structure of shared-perception reasoning, validated by systematic error taxonomy, and confirmed by a full evidence ladder: non-compositional confidence, consensus, and learned-score methods saturate around 70--71\%, while $\kappa$-based compositional methods reach 79--81\%. Our results demonstrate that output format design is not merely a usability choice, but a first-class verification decision.
 
 % ===========================================================================
 % References - placeholder entries
@@ -526,6 +524,108 @@ We have shown that neuro-symbolic reasoning candidates carry an underutilized ve
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \appendix
+\numberwithin{equation}{section}
+\numberwithin{table}{section}
+\numberwithin{figure}{section}
+
+\section{Training Data Construction}
+\label{app:data-construction}
+
+Table~\ref{tab:data-construction} summarizes the full construction pipeline for the 2,012-example SFT set. We start from the official Geometry3K~\cite{lu2021intergps} training split, use the geometry3k subset of Nemotron-Image-Training-v3~\cite{nvidia2024nemotron3} as the Qwen3-VL-235B-A22B-Thinking CoT source, reformat each matched trace into the \sketch{} VGF+DSL+answer format with DeepSeek V4 Pro, and retain only examples whose DSL executes and matches the official answer. The reformatting stage is text-only: the expensive visual reasoning is supplied by the Qwen3-VL CoT trace, while the official gold answer is used as the final target for machine-checkable reformatting.
+
+\begin{table}[h]
+\centering
+\caption{Training data construction and filtering. Percentages are relative to the 2,078 matched CoT rows unless otherwise noted.}
+\label{tab:data-construction}
+\small
+\begin{tabular}{lrr}
+\toprule
+Stage & Count & Rate \\
+\midrule
+Official Geometry3K train rows & 2,101 & -- \\
+Matched Qwen3-VL CoT traces & 2,078 & 98.91\% of official \\
+Qwen3-VL boxed-answer correct & 2,065 & 99.37\% \\
+DeepSeek V4 Pro reformat attempts & 2,078 & 100.00\% \\
+Strict validator pass & 1,963 & 94.47\% \\
+Recovered by tolerant VGF normalization & 49 & 2.36\% \\
+Final executor-validated SFT rows & 2,012 & 96.82\% \\
+\midrule
+Filtered: execution-answer mismatch & 61 & 2.94\% \\
+Filtered: DSL execution/safety error & 5 & 0.24\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The final 66 filtered examples consist of 61 execution-answer mismatches and five DSL execution/safety failures: one undefined \texttt{UB}, one undefined \texttt{z}, one undefined \texttt{m}, and two blocked-token errors. The tolerant VGF pass clears unsupported or over-arity visual facts only when the DSL and answer remain executor-valid; a final post-processing pass keeps 2,012 rows, with 41 DSL snippets changed by the sanitizer and 6 VGF lists cleared.
+
+\section{Data Construction Prompts}
+\label{app:prompts}
+
+\paragraph{Stage 1: stored source prompt for frontier CoT traces.}
+We did not rerun Qwen3-VL-235B-A22B-Thinking for this paper. We use an existing CoT source whose stored user messages follow the problem image plus the following prompt pattern:
+\begin{verbatim}
+Solve this geometry problem. Study the diagram and select the correct answer.
+
+{problem_text}
+{choices}
+
+Do not explain your answer but write only the answer label (A, B, ...) in this
+format:
+Answer: \boxed{...}.
+\end{verbatim}
+
+\paragraph{Stage 2: VGF+DSL reformatting.}
+DeepSeek V4 Pro receives no image input. It reformats the official problem, choices, official answer, and Qwen3-VL natural-language CoT into the target \sketch{} format using the following template:
+\begin{verbatim}
+Convert the provided Qwen3-VL-235B natural-language geometry chain-of-thought
+into the target VGF+DSL format.
+Do not solve from scratch. Use the teacher CoT as the visual/reasoning evidence
+and use the official gold answer as the final target.
+Return exactly three sections in this order and no extra sections:
+[VGF]
+[DSL]
+[Final Answer]
+
+[VGF] rules:
+Output a raw JSON list only. Do not use markdown fences.
+Each item must be {"relation": <relation>, "entities": [<tokens>]} with exact
+relation arity.
+Allowed relations: {allowed_vgf_relations}.
+Relation arities: {relation_arities}.
+For unary shape relations, put the whole object in one entity token, e.g.
+{"relation":"parallelogram","entities":["MNPQ"]}.
+Use at most 4 facts to stay safely under the validator limit of 5 facts.
+Use [] if no reliable visual fact is needed.
+
+[DSL] rules:
+Output executable Python assignment statements only. Do not use markdown fences.
+Do not include comments or prose.
+Never write import statements, including 'from math import ...'. Math functions
+are already available by name.
+Every variable must be assigned before it is used.
+Do not write placeholder equations with unknown symbols.
+The final assignment must define a variable named answer.
+The value of answer must evaluate to the official gold option value; use the
+teacher CoT equations to derive that value.
+Allowed math names: sqrt, pi, sin, cos, tan, radians, degrees, asin, acos, atan,
+abs, min, max, round.
+Do not read files, import modules, call external tools, or use input/output
+functions.
+[Final Answer] must be exactly the official gold option letter: {gold}.
+In [DSL], set answer to the numeric or symbolic value of option {gold}:
+{gold_value}.
+
+Official problem:
+{problem_text}
+{choices}
+
+Official gold answer: {gold}
+Official gold option value: {gold_value}
+Teacher boxed answer: {qwen_boxed_answer}
+
+Teacher NL CoT:
+{qwen_cot}
+\end{verbatim}
 
 \section{$\tau_{\text{exec}}$ Sensitivity}
 \label{app:tau-sensitivity}
@@ -541,19 +641,16 @@ The only tunable hyperparameter in \ccv{} is the execution-majority threshold $\
 
 \begin{table}[h]
 \centering
-\caption{Selected points from the $\tau_{\text{exec}}$ sweep. The dev-selected threshold is $\tau_{\text{exec}}=9$, tied with 10.}
+\caption{Selected points from the $\tau_{\text{exec}}$ sweep (full curve in the figure above). The dev-selected threshold is $\tau_{\text{exec}}=9$.}
 \label{tab:tau-sensitivity}
 \small
 \begin{tabular}{rccc}
 \toprule
 $\tau_{\text{exec}}$ & Dev@300 & Heldout/OOD & All \\
 \midrule
-1 & 76.67 & 80.13 & 79.52 \\
-5 & 77.00 & 80.77 & 80.11 \\
-9 & \textbf{77.00} & \textbf{81.83} & \textbf{80.98} \\
-10 & \textbf{77.00} & \textbf{81.83} & \textbf{80.98} \\
-14 & 76.00 & 81.33 & 80.40 \\
-16 & 75.67 & 81.19 & 80.22 \\
+1 (no threshold) & 76.67 & 80.13 & 79.52 \\
+9 (selected) & \textbf{77.00} & \textbf{81.83} & \textbf{80.98} \\
+16 (maximum) & 75.67 & 81.19 & 80.22 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -645,78 +742,96 @@ All threshold settings yield identical results because geometry answers are effe
 \section{Qualitative Case Studies}
 \label{app:case-studies}
 
-We show one compact example for each requested case type from the frozen Qwen3.5-9B s240 $K{=}16$, $T{=}0.8$ pool.
+We present four representative cases from the frozen Qwen3.5-9B s240 $K{=}16$, $T{=}0.8$ pool, selected to illustrate the four behavioral modes of \ccv{}: (1)~successful rescue when execution consensus is wrong but claim is correct, (2)~failure when both pathways agree on the wrong answer, (3)~false $\kappa$ due to correlated perception error, and (4)~fallback routing when no self-consistent candidate exists. Each case reports method outputs and the key DSL of the \ccv{}-selected candidate.
 
-\paragraph{CCV rescue on A2$\times$B1.}
-Dataset \texttt{geometry3k\_test}, qid 325. Expected answer B, with choices A=12, B=16, C=51, D=65. Claim MV is B, Exec MV and EAV are C, and \ccv{} returns B. \ccv{} selects a correct $\kappa$-consistent claim while EAV follows a wrong execution consensus.
+\subsection{CCV Rescue (Exec\ding{55}\,Claim\ding{51})}
 
-\noindent \textbf{\ccv{} selected output.} Claim B; executed value 16.25 maps to B; $\kappa=1$; claim cluster size 9; execution cluster size 6.
+\texttt{geometry3k\_test} qid~325. Expected: B (16). Choices: A=12, B=16, C=51, D=65.
+
+\smallskip
+\begin{tabular}{lcccc}
+\toprule
+& Claim MV & Exec MV & EAV & \ccv{} \\
+\midrule
+Output & B & C & C & \textbf{B} \\
+\bottomrule
+\end{tabular}
+\smallskip
+
+\noindent \textbf{CCV-selected DSL} ($\kappa=1$, claim cluster 9, exec cluster 6):
 \begin{verbatim}
-[VGF]
-[{"relation":"equal_angle","entities":["M","Y"]},
- {"relation":"equal_angle","entities":["L","X"]}]
-[DSL]
-angle_M = 51
-angle_L = 65
 angle_X = angle_L
 x = angle_X / 4
-answer = x
+answer = x          # 16.25 -> B
 \end{verbatim}
+\ccv{} selects a $\kappa$-consistent candidate whose claim and execution agree on B, while EAV follows a wrong execution majority (C). This is the canonical recoverable failure: the neural pathway is correct but the symbolic pathway is corrupted by shared perception error.
 
-\noindent \textbf{EAV selected output.} Claim C; executed value 51.0 maps to C; $\kappa=1$; claim cluster size 7; execution cluster size 7.
+\subsection{CCV Failure (Exec\ding{55}\,Claim\ding{55})}
+
+\texttt{geometry3k\_test} qid~72. Expected: A (3). Choices: A=3, B=4, C=6, D=7.
+
+\smallskip
+\begin{tabular}{lcccc}
+\toprule
+& Claim MV & Exec MV & EAV & \ccv{} \\
+\midrule
+Output & B & B & B & B \\
+\bottomrule
+\end{tabular}
+\smallskip
+
+\noindent \textbf{CCV-selected DSL} ($\kappa=1$, claim cluster 15, exec cluster 15):
 \begin{verbatim}
-[VGF]
-[{"relation":"equal_angle","entities":["M","Y"]},
- {"relation":"equal_angle","entities":["L","X"]}]
-[DSL]
-angle_M = 51
-angle_L = 65
-x = angle_M
-answer = x
-\end{verbatim}
-
-\paragraph{CCV failure on A2$\times$B2.}
-Dataset \texttt{geometry3k\_test}, qid 72. Expected answer A, with choices A=3, B=4, C=6, D=7. Claim MV, Exec MV, EAV, and \ccv{} all return B. \ccv{} cannot rescue the case because the available cross-channel agreement is itself wrong.
-
-\noindent \textbf{\ccv{} selected output.} Claim B; executed value 4.0 maps to B; $\kappa=1$; claim cluster size 15; execution cluster size 15.
-\begin{verbatim}
-[VGF]
-[]
-[DSL]
 x = 4
-answer = x
+answer = x          # 4.0 -> B
 \end{verbatim}
+All methods agree on the wrong answer. \ccv{} cannot rescue this case because the cross-channel agreement is itself wrong---both pathways share the same perceptual error.
 
-\paragraph{Fake $\kappa$.}
-Dataset \texttt{geometry3k\_test}, qid 35. Expected answer D, with choices A=20, B=25, C=30, D=155. Claim MV, Exec MV, EAV, and \ccv{} all return B. The selected candidate has claim and execution agreement, but both agree on the wrong answer. This is the characteristic \ccv{} failure mode: a correlated visual or symbolic error can make both channels self-consistent around the same incorrect answer.
+\subsection{False $\kappa$ (Correlated Perception Error)}
 
-\noindent \textbf{\ccv{} selected output.} Claim B; executed value 25.0 maps to B; $\kappa=1$; claim cluster size 16; execution cluster size 16.
+\texttt{geometry3k\_test} qid~35. Expected: D (155). Choices: A=20, B=25, C=30, D=155.
+
+\smallskip
+\begin{tabular}{lcccc}
+\toprule
+& Claim MV & Exec MV & EAV & \ccv{} \\
+\midrule
+Output & B & B & B & B \\
+\bottomrule
+\end{tabular}
+\smallskip
+
+\noindent \textbf{CCV-selected DSL} ($\kappa=1$, claim cluster 16, exec cluster 16):
 \begin{verbatim}
-[VGF]
-[]
-[DSL]
 arc_BC = 30
 arc_AD = 20
 angle_2 = (arc_BC + arc_AD) / 2
-answer = angle_2
+answer = angle_2    # 25.0 -> B
 \end{verbatim}
+This is the characteristic \ccv{} failure mode: a correlated visual error makes both channels self-consistent around the wrong answer. With 16/16 candidates in both clusters, no diversity exists to break the false consensus.
 
-\paragraph{Empty $\kappa$ pool with execution fallback.}
-Dataset \texttt{geometry3k\_test}, qid 56. Expected answer C, with choices A=66, B=68, C=70, D=72. Claim MV is D, Exec MV and EAV are C, and \ccv{} returns C. The $\kappa$ pool is empty, so \ccv{} falls back to a large execution cluster that gives the correct answer. This illustrates the value of dual-pathway routing: when self-consistency provides no retained pool, execution-majority fallback can still recover a correct answer.
+\subsection{Empty $\kappa$-Pool with Execution Fallback}
 
-\noindent \textbf{\ccv{} selected output.} Claim D; executed value 70.0 maps to C; $\kappa=0$; claim cluster size 10; execution cluster size 16.
+\texttt{geometry3k\_test} qid~56. Expected: C (70). Choices: A=66, B=68, C=70, D=72.
+
+\smallskip
+\begin{tabular}{lcccc}
+\toprule
+& Claim MV & Exec MV & EAV & \ccv{} \\
+\midrule
+Output & D & C & C & \textbf{C} \\
+\bottomrule
+\end{tabular}
+\smallskip
+
+\noindent \textbf{CCV-selected DSL} ($\kappa=0$, claim cluster 10, exec cluster 16):
 \begin{verbatim}
-[VGF]
-[{"relation":"right_triangle","entities":["ABC"]},
- {"relation":"equal_length","entities":["AB","24"]},
- {"relation":"equal_length","entities":["BC","74"]}]
-[DSL]
 leg1 = 24
 hypotenuse = 74
-x_squared = hypotenuse**2 - leg1**2
-x = sqrt(x_squared)
-answer = x
+x = sqrt(hypotenuse**2 - leg1**2)
+answer = x          # 70.0 -> C
 \end{verbatim}
+The $\kappa$-pool is empty (no candidate's claim matches its execution), so \ccv{} falls back to the execution-majority pathway. The large exec cluster (16/16) exceeds $\tau_{\text{exec}}$, providing the correct answer. This illustrates dual-pathway routing: when cross-channel agreement is absent, the deterministic symbolic path remains available as a fallback.
 
 \section{Proofs for the Cross-Channel Verification Analysis}
 \label{app:proofs}
@@ -732,14 +847,7 @@ Define $p_e=P(Y_i=z^*)=\mathbb{E}_V[P_e(z^*\mid V)]$ and $p_c=P(X_i=z^*)=P_c(z^*
     \frac{\operatorname{Var}_V[P_e(z^*\mid V)]}{p_e(1-p_e)}.
     \label{eq:rho_e}
 \end{equation}
-Indeed, for $i\neq j$,
-\begin{align}
-    \operatorname{Cov}(E_i,E_j)
-    &=\mathbb{E}_V[\mathbb{E}[E_iE_j\mid V]]-p_e^2 \\
-    &=\mathbb{E}_V[P_e(z^*\mid V)^2]-\mathbb{E}_V[P_e(z^*\mid V)]^2 \\
-    &=\operatorname{Var}_V[P_e(z^*\mid V)].
-\end{align}
-Thus shared perception creates positive within-channel correlation whenever execution accuracy varies with the visual state.
+By the law of total covariance applied to $E_i=\mathbf{1}[Y_i=z^*]$ for $i\neq j$, $\operatorname{Cov}(E_i,E_j)=\operatorname{Var}_V[P_e(z^*\mid V)]$, so shared perception creates positive correlation whenever execution accuracy varies with the visual state.
 
 \subsection{Proof of Theorem~\ref{thm:accuracy}}
 
@@ -748,57 +856,24 @@ Let $\kappa_i=\mathbf{1}[X_i=Y_i]$. Decompose self-consistency into true and fal
     t_\kappa &= P(X_i=Y_i=z^*), \\
     f_\kappa &= P(X_i=Y_i\neq z^*)=\sum_{z\neq z^*}P(X_i=z,Y_i=z).
 \end{align}
-Then
-\begin{equation}
-    P(\kappa_i=1)=t_\kappa+f_\kappa,
-\end{equation}
-and therefore
+Then $P(\kappa_i=1)=t_\kappa+f_\kappa$, and by Bayes rule:
 \begin{equation}
     P(Y_i=z^*\mid \kappa_i=1)
-    =
-    \frac{P(Y_i=z^*,\kappa_i=1)}{P(\kappa_i=1)}
     =
     \frac{t_\kappa}{t_\kappa+f_\kappa}.
 \end{equation}
 This identity does not require independence; it simply states that self-consistent candidates are correct when agreement is true rather than false.
 
-Under the latent shared-perception model,
-\begin{align}
-    t_\kappa
-    &=P(X_i=z^*,Y_i=z^*) \\
-    &=P_c(z^*)\,\mathbb{E}_V[P_e(z^*\mid V)] \\
-    &=p_cp_e.
-\end{align}
+Under the latent shared-perception model, conditional independence of $X_i$ and $Y_i$ given $V$ yields $t_\kappa=P_c(z^*)\,\mathbb{E}_V[P_e(z^*\mid V)]=p_cp_e$.
 If wrong answers are approximately dispersed uniformly over $M{-}1$ alternatives, then
 \begin{equation}
     f_\kappa \approx \frac{(1-p_c)(1-p_e)}{M-1}.
 \end{equation}
-The condition $p_\kappa>p_e$ is equivalent to
-\begin{align}
-    \frac{p_cp_e}{p_cp_e+f_\kappa} &> p_e \\
-    p_c(1-p_e) &> f_\kappa.
-\end{align}
-Substituting the uniform-dispersion approximation yields
-\begin{equation}
-    p_c(1-p_e)>\frac{(1-p_c)(1-p_e)}{M-1}
-    \quad\Longleftrightarrow\quad
-    p_c>\frac{1}{M},
-\end{equation}
-for $p_e<1$; the $p_e=1$ case is trivial. Thus cross-channel agreement improves per-candidate precision whenever the claim pathway is better than random over the effective answer space.
+The condition $p_\kappa>p_e$ reduces to $p_c(1-p_e)>f_\kappa$. Substituting the uniform-dispersion approximation gives $p_c>(1-p_c)/(M-1)$, i.e., $p_c>1/M$ for $p_e<1$. Thus cross-channel agreement improves per-candidate precision whenever the claim pathway is better than random over the effective answer space.
 
 \subsection{Proof of Theorem~\ref{thm:snr}}
 
-Consider $n$ exchangeable binary correctness variables $B_1,\ldots,B_n$ with $P(B_i=1)=p$ and pairwise correlation $\rho$. The sample mean $\bar{B}=n^{-1}\sum_i B_i$ has variance
-\begin{equation}
-    \operatorname{Var}(\bar{B})
-    =
-    \frac{p(1-p)}{n}\left[1+(n-1)\rho\right].
-\end{equation}
-In a one-vs-rest approximation, majority reliability is monotone in
-\begin{equation}
-    \mathrm{SNR}(p,n,\rho)=\frac{p-\tfrac{1}{2}}{\sqrt{\operatorname{Var}(\bar{B})}}.
-\end{equation}
-Applying this expression to raw exec voting with $(p_e,K,\rho_e)$ and to a retained $\kappa$-filtered pool with $(p_\kappa,K_\kappa,\rho_\kappa)$, and conditioning on retained pool size $K_\kappa$, gives $\mathrm{SNR}_\kappa>\mathrm{SNR}_{\mathrm{raw}}$ iff
+For $n$ exchangeable binary correctness variables with $P(B_i=1)=p$ and pairwise correlation $\rho$, the variance of the sample mean is $p(1-p)[1+(n-1)\rho]/n$. Applying the SNR definition from the main text to raw exec voting $(p_e,K,\rho_e)$ and to the retained $\kappa$-filtered pool $(p_\kappa,K_\kappa,\rho_\kappa)$ gives $\mathrm{SNR}_\kappa>\mathrm{SNR}_{\mathrm{raw}}$ iff
 \begin{equation}
     \frac{p_\kappa-\tfrac{1}{2}}{p_e-\tfrac{1}{2}}
     >
@@ -806,9 +881,9 @@ Applying this expression to raw exec voting with $(p_e,K,\rho_e)$ and to a retai
     \frac{p_\kappa(1-p_\kappa)}{p_e(1-p_e)}
     \cdot
     \frac{K(1+(K_\kappa-1)\rho_\kappa)}{K_\kappa(1+(K-1)\rho_e)}
-    },
+    }.
+    \label{eq:snr_full_condition}
 \end{equation}
-which is condition~\eqref{eq:snr_condition}.
 
 \begin{corollary}[Answer dispersion amplifies cross-channel advantage]
 \label{cor:dispersion}
