@@ -67,6 +67,7 @@
 \usepackage{subcaption}
 \usepackage{wrapfig}
 \usepackage{pifont}
+\usepackage{afterpage}
 
 \definecolor{citecolor}{HTML}{0066CC}
 \hypersetup{colorlinks=true, linkcolor=citecolor, citecolor=citecolor, urlcolor=citecolor}
@@ -290,13 +291,18 @@ MathVista-GPS~\cite{lu2023mathvista} & EN & 208 & Reference \\
 
 \subsection{Main Results}
 
-\begin{figure}[t]
+\begin{figure*}[t]
     \centering
-    \includegraphics[width=\linewidth]{figures/figure3.pdf}
+    \includegraphics[width=0.72\textwidth]{figures/figure3.pdf}
     \caption{\textbf{Evidence ladder and $K$ scaling.} Surface and confidence-based selectors cluster near 70--71\%, execution-only methods improve moderately, and cross-layer compositional verification produces the main jump to 79--81\%. As $K$ increases, the \ccv{} gain over Claim MV grows, indicating that compositional verification unlocks additional rollout diversity.}
     \label{fig:evidence-scaling}
-\end{figure}
+\end{figure*}
 
+Figure~\ref{fig:evidence-scaling} visualizes the same evidence ladder and $K$-scaling trend, while Table~\ref{tab:main} reports the full benchmark breakdown. The four surface and confidence-based selectors---Claim MV, logprob-weighted MV, CISC, and URSA-RM weighted MV---all lie in a narrow 70.57--71.39\% band, despite spanning self-confidence weighting and an external learned PRM. The learned ablation in Section~\ref{sec:learned} confirms this ceiling extends to logprob-based best-of-$N$ and learned surface+execution feature selectors. Even URSA-RM, the strongest external scorer, achieves only $+0.76\pp$ over Claim MV when used for weighted voting. Execution-only methods improve to 74--76\%, but the large jump appears only when cross-layer agreement is used as a compositional signal: a PROVE-style $\kappa$ filter reaches 79.52\%, and \ccv{} reaches 80.98\%, a $+10.41\pp$ improvement over Claim MV and $+4.80\pp$ over EAV.
+
+Paired per-question tests over the fixed 1,709-question evaluation set confirm that these main gains are statistically reliable: \ccv{} improves over Claim MV by $+10.42\pp$ (95\% paired bootstrap CI $[8.48,12.40]\pp$; exact McNemar $p<10^{-12}$) and over EAV by $+4.80\pp$ (95\% CI $[3.39,6.26]\pp$; exact McNemar $p=5.7{\times}10^{-11}$). The gain is also not concentrated on the development split: on the disjoint heldout/OOD split (excluding dev 300), \ccv{} reaches 81.93\%. Finally, a sweep over the only tunable parameter, $\tau_{\text{exec}}$, shows that \ccv{} is robust rather than finely tuned: across $\tau_{\text{exec}}=5\ldots14$, dev accuracy varies by 1.00$\pp$ and heldout/OOD accuracy by 1.06$\pp$ (Appendix~\ref{app:tau-sensitivity}). The $\kappa$ matching threshold itself is also stable: varying the candidate-level relative tolerance around the default leaves \ccv{} accuracy unchanged on the full s240 pool (Appendix~\ref{app:kappa-threshold}).
+
+\afterpage{%
 \begin{table*}[t]
 \centering
 \caption{Evidence ladder across verification signal types ($K{=}16$). Surface/confidence methods, including learned PRM scores and self-judged confidence, cluster near 70--71\%. Execution-only signals improve moderately. Cross-layer compositional verification produces the large jump to 79--81\%.}
@@ -324,8 +330,7 @@ Oracle & upper bound & 93.51 & 93.50 & 91.78 & 92.79 & 93.27 \\
 \bottomrule
 \end{tabular}
 \end{table*}
-
-Figure~\ref{fig:evidence-scaling} visualizes the same evidence ladder and $K$-scaling trend, while Table~\ref{tab:main} reports the full benchmark breakdown. The four surface and confidence-based selectors---Claim MV, logprob-weighted MV, CISC, and URSA-RM weighted MV---all lie in a narrow 70.57--71.39\% band, despite spanning self-confidence weighting and an external learned PRM. The learned ablation in Section~\ref{sec:learned} confirms this ceiling extends to logprob-based best-of-$N$ and learned surface+execution feature selectors. Even URSA-RM, the strongest external scorer, achieves only $+0.76\pp$ over Claim MV when used for weighted voting. Execution-only methods improve to 74--76\%, but the large jump appears only when cross-layer agreement is used as a compositional signal: a PROVE-style $\kappa$ filter reaches 79.52\%, and \ccv{} reaches 80.98\%, a $+10.41\pp$ improvement over Claim MV and $+4.80\pp$ over EAV. Paired per-question tests over the fixed 1,709-question evaluation set confirm the main gains: \ccv{} improves over Claim MV by $+10.42\pp$ (95\% paired bootstrap CI $[8.48,12.40]\pp$; exact McNemar $p<10^{-12}$) and over EAV by $+4.80\pp$ (95\% CI $[3.39,6.26]\pp$; exact McNemar $p=5.7{\times}10^{-11}$). On the disjoint heldout/OOD split (excluding dev 300), \ccv{} reaches 81.93\%. A sweep over the only tunable parameter, $\tau_{\text{exec}}$, shows that \ccv{} is robust rather than finely tuned: across $\tau_{\text{exec}}=5\ldots14$, dev accuracy varies by 1.00$\pp$ and heldout/OOD accuracy by 1.06$\pp$ (Appendix~\ref{app:tau-sensitivity}). The $\kappa$ matching threshold itself is also stable: varying the candidate-level relative tolerance around the default leaves \ccv{} accuracy unchanged on the full s240 pool (Appendix~\ref{app:kappa-threshold}).
+}
 
 \subsection{Cross-Model Generalization}
 \label{sec:cross-model-generalization}
