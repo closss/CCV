@@ -14,6 +14,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Check LaTeX references
+        run: python scripts/check_latex_refs.py
+
       - name: Compile LaTeX document
         uses: xu-cheng/latex-action@v3
         with:
