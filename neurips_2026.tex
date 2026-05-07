@@ -153,7 +153,10 @@ We make four contributions:
 \paragraph{Visual grounding facts (VGF).}
 For cross-candidate verification to work, visual observations must be comparable across candidates in a structured way. Free-form natural-language descriptions of a diagram are not reliably alignable; two candidates may describe the same geometric relationship with different wording. We therefore represent visual grounding as a list of atomic facts drawn from a closed vocabulary of relations:
 \begin{equation}
-    f = (\texttt{relation}, \texttt{entities}), \qquad \texttt{relation} \in \{\texttt{parallel}, \texttt{perpendicular}, \texttt{collinear}, \ldots\}
+    \begin{aligned}
+    f &= (\texttt{relation}, \texttt{entities}), \\
+    \texttt{relation} &\in \{\texttt{parallel}, \texttt{perpendicular}, \texttt{collinear}, \ldots\}
+    \end{aligned}
     \label{eq:vgf}
 \end{equation}
 The closed vocabulary ensures parseability and enables direct cross-candidate comparison of perceived geometric structure.
@@ -222,7 +225,7 @@ The $\kappa$-filtered pool improves over raw exec voting whenever the precision 
 
 This yields a testable, counterintuitive prediction: $\kappa$-gating need not reduce correlation to improve majority reliability. Precision filtering can dominate the correlation penalty. This complements the negative findings of \cite{nitarach2026} on diverse prompting: when errors arise from shared perception, decorrelating samples is the wrong lever---filtering for cross-channel agreement targets precision directly.
 
-\textbf{Empirical support.} We directly measure within-question correctness correlations on the full dataset (1,709 questions $\times$ 16 candidates). Raw exec votes have pairwise correlation $\rho_e=0.526$; $\kappa$-filtered votes have higher correlation $\rho_\kappa=0.646$. Yet per-candidate accuracy jumps from 61.7\% to 87.1\%, and the one-vs-rest SNR proxy improves by $4.1\times$ (0.32 to 1.33). Thus the retained pool is more correlated, but substantially more reliable---directly validating the counterintuitive prediction of Theorem~\ref{thm:snr}: precision filtering dominates even when it increases correlation. This confirms that the dominant mechanism is precision filtering, not decorrelation: the $\kappa_i\cdot|\text{exec\_cluster}_i|$ term in Algorithm~\ref{alg:ccv} counts consensus only after it has survived cross-channel agreement.
+\textbf{Empirical support.} We directly measure within-question correctness correlations on the full dataset (1,709 questions $\times$ 16 candidates). Raw exec votes have pairwise correlation $\rho_e=0.526$; $\kappa$-filtered votes have higher correlation $\rho_\kappa=0.646$. Yet per-candidate accuracy jumps from 61.7\% to 87.1\%, and the one-vs-rest SNR proxy improves by $4.1\times$ (0.32 to 1.33). Figure~\ref{fig:precision-filtering} visualizes this precision-filtering regime. Thus the retained pool is more correlated, but substantially more reliable---directly validating the counterintuitive prediction of Theorem~\ref{thm:snr}: precision filtering dominates even when it increases correlation. This confirms that the dominant mechanism is precision filtering, not decorrelation: the $\kappa_i\cdot|\text{exec\_cluster}_i|$ term in Algorithm~\ref{alg:ccv} counts consensus only after it has survived cross-channel agreement.
 
 \begin{figure}[t]
     \centering
@@ -271,7 +274,7 @@ Algorithm~\ref{alg:ccv} summarizes CCV. It uses claim-execution agreement as a p
 
 \subsection{Setup}
 
-\paragraph{Models and training.} Our primary generator is Qwen3.5-9B, fine-tuned with LoRA ($r{=}8, \alpha{=}16$) on 2,012 executor-validated Geometry3K training examples. The training data was constructed by reformattig Qwen3-VL CoT traces into the \sketch{} format using DeepSeek V4 Pro. We also evaluate Gemma4-E4B to test cross-model generalization. Training was conducted using LLaMA-Factory with bf16 on 8 NVIDIA 4090 GPUs.
+\paragraph{Models and training.} Our primary generator is Qwen3.5-9B, fine-tuned with LoRA ($r{=}8, \alpha{=}16$) on 2,012 executor-validated Geometry3K training examples. The training data was constructed by reformatting Qwen3-VL CoT traces into the \sketch{} format using DeepSeek V4 Pro. We also evaluate Gemma4-E4B to test cross-model generalization. Training was conducted using LLaMA-Factory with bf16 on 8 NVIDIA 4090 GPUs.
 
 \begin{table}[h]
 \centering
@@ -329,7 +332,7 @@ Oracle & upper bound & 93.51 & 93.50 & 91.78 & 92.79 & 93.27 \\
 \end{tabular}
 \end{table*}
 
-Table~\ref{tab:main} reports the full evidence ladder. The four surface and confidence-based selectors---Claim MV, logprob-weighted MV, CISC, and URSA-RM weighted MV---all lie in a narrow 70.57--71.39\% band, despite spanning self-confidence weighting and an external learned PRM. The learned ablation in Section~\ref{sec:learned} confirms this ceiling extends to logprob-based best-of-$N$ and learned surface+execution feature selectors. Even URSA-RM, the strongest external scorer, achieves only $+0.76\pp$ over Claim MV when used for weighted voting. Execution-only methods improve to 74--76\%, but the large jump appears only when cross-layer agreement is used as a compositional signal: a PROVE-style $\kappa$ filter reaches 79.52\%, and \ccv{} reaches 80.98\%, a $+10.41\pp$ improvement over Claim MV and $+4.80\pp$ over EAV. On the disjoint heldout/OOD split (excluding dev 300), \ccv{} reaches 81.93\%. A sweep over the only tunable parameter, $\tau_{\text{exec}}$, shows that \ccv{} is robust rather than finely tuned: across $\tau_{\text{exec}}=5\ldots14$, dev accuracy varies by 1.00$\pp$ and heldout/OOD accuracy by 1.06$\pp$ (Appendix~\ref{app:tau-sensitivity}). The $\kappa$ matching threshold itself is also stable: varying the candidate-level relative tolerance around the default leaves \ccv{} accuracy unchanged on the full s240 pool (Appendix~\ref{app:kappa-threshold}).
+Figure~\ref{fig:evidence-scaling} visualizes the same evidence ladder and $K$-scaling trend, while Table~\ref{tab:main} reports the full benchmark breakdown. The four surface and confidence-based selectors---Claim MV, logprob-weighted MV, CISC, and URSA-RM weighted MV---all lie in a narrow 70.57--71.39\% band, despite spanning self-confidence weighting and an external learned PRM. The learned ablation in Section~\ref{sec:learned} confirms this ceiling extends to logprob-based best-of-$N$ and learned surface+execution feature selectors. Even URSA-RM, the strongest external scorer, achieves only $+0.76\pp$ over Claim MV when used for weighted voting. Execution-only methods improve to 74--76\%, but the large jump appears only when cross-layer agreement is used as a compositional signal: a PROVE-style $\kappa$ filter reaches 79.52\%, and \ccv{} reaches 80.98\%, a $+10.41\pp$ improvement over Claim MV and $+4.80\pp$ over EAV. On the disjoint heldout/OOD split (excluding dev 300), \ccv{} reaches 81.93\%. A sweep over the only tunable parameter, $\tau_{\text{exec}}$, shows that \ccv{} is robust rather than finely tuned: across $\tau_{\text{exec}}=5\ldots14$, dev accuracy varies by 1.00$\pp$ and heldout/OOD accuracy by 1.06$\pp$ (Appendix~\ref{app:tau-sensitivity}). The $\kappa$ matching threshold itself is also stable: varying the candidate-level relative tolerance around the default leaves \ccv{} accuracy unchanged on the full s240 pool (Appendix~\ref{app:kappa-threshold}).
 
 \subsection{Cross-Model Generalization}
 \label{sec:cross-model-generalization}
@@ -355,7 +358,7 @@ Gemma4-E4B & 33.43 & 59.81 & $+26.38$ & 0.504 & 0.630 & 5.77 & $-$0.48$\rightarr
 }
 \end{table}
 
-The mechanism predicted by Theorem~\ref{thm:accuracy} replicates quantitatively: $\kappa$-filtering yields nearly identical precision gains across models ($+25.40\pp$ vs $+26.38\pp$), and the counterintuitive correlation pattern also repeats ($\rho_\kappa>\rho_e$ while SNR improves). The negative raw SNR for Gemma4 reflects that its per-candidate execution accuracy (33.4\%) is below chance in the one-vs-rest approximation, yet $\kappa$-filtering still lifts it above the decision boundary. This supports the interpretation that cross-channel precision filtering is model-agnostic. The \ccv{} advantage also scales with $K$ on Gemma4 (Appendix~\ref{app:gemma-k-scaling}).
+Table~\ref{tab:cross-model-diagnostics} shows that the mechanism predicted by Theorem~\ref{thm:accuracy} replicates quantitatively: $\kappa$-filtering yields nearly identical precision gains across models ($+25.40\pp$ vs $+26.38\pp$), and the counterintuitive correlation pattern also repeats ($\rho_\kappa>\rho_e$ while SNR improves). The negative raw SNR for Gemma4 reflects that its per-candidate execution accuracy (33.4\%) is below chance in the one-vs-rest approximation, yet $\kappa$-filtering still lifts it above the decision boundary. This supports the interpretation that cross-channel precision filtering is model-agnostic. The \ccv{} advantage also scales with $K$ on Gemma4 (Appendix~\ref{app:gemma-k-scaling}).
 
 \subsection{$K$ Scaling Analysis}
 
@@ -375,7 +378,7 @@ $K$ & Claim MV & Exec MV & \ccv{} & Oracle & \ccv{} $-$ Claim MV \\
 \end{tabular}
 \end{table}
 
-The \ccv{} advantage scales with $K$: the gain over Claim MV grows from $+$5.60$\pp$ at $K{=}4$ to $+$10.41$\pp$ at $K{=}16$. Surface consensus saturates quickly (Claim MV gains only $+$1.23$\pp$ from $K{=}4$ to 16), while compositional verification continues extracting signal from larger candidate pools.
+Table~\ref{tab:scaling} shows that the \ccv{} advantage scales with $K$: the gain over Claim MV grows from $+$5.60$\pp$ at $K{=}4$ to $+$10.41$\pp$ at $K{=}16$. Surface consensus saturates quickly (Claim MV gains only $+$1.23$\pp$ from $K{=}4$ to 16), while compositional verification continues extracting signal from larger candidate pools.
 
 As a negative control, VGF consensus---another within-layer signal---not only fails to help but \emph{hurts} performance when added (from 80.05\% to 79.93\%). This reinforces the central finding: within-layer consensus---whether the layer is claim, execution, or VGF---is vulnerable to correlated perception errors. Only cross-layer gating provides robust verification signal.
 
@@ -406,7 +409,7 @@ Dual-output \ccv{} (ours, rule) & 77.00 & 81.93 & 80.98 & $+$10.16 \\
 \end{tabular}
 \end{table}
 
-Three findings emerge:
+Table~\ref{tab:learned} reports the feature ablation. Three findings emerge:
 
 \textbf{(1) Compositional features are the sole source of transferable signal.} Standard logprob-based selectors and learned surface/exec features are essentially equivalent to Claim MV: Best-of-$N$ is worse (71.11\% OOD), LogReg S-only gives only $+0.08\pp$, and adding execution features without compositional agreement does not help (71.86$\rightarrow$71.69). Adding compositional features produces a $+$8$\pp$ jump (71.69$\rightarrow$79.85), and using \emph{only} compositional features matches full-feature performance.
 
@@ -430,7 +433,7 @@ The remaining 50 cases (14\%) involve correct execution with other error pattern
 \paragraph{Recovery by \ccv{}.}
 $\kappa$-gating recovers 123/139 = \textbf{88.5\%} of Exec\ding{55}\,Claim\ding{51} cases---precisely the subtype where the neural pathway is correct but the symbolic pathway is corrupted by shared perception error. This is the failure mode that the cross-channel principle predicts should be recoverable: when exec consensus is unreliable, $\kappa$-gating down-weights it in favor of claim-exec agreement.
 
-Exec\ding{55}\,Claim\ding{55} (both pathways wrong) remains largely unrecoverable (8.3\%), representing the theoretical limit of any selection method operating on the same candidate pool. Breaking through this ceiling requires independent premise verification---generating \emph{new} evidence, not selecting among existing candidates.
+Exec\ding{55}\,Claim\ding{55} (both pathways wrong) lies outside the reach of selection-only verification in most cases (8.3\% recovered), since both pathways support the same incorrect answer. Improving this regime calls for independent premise verification---generating \emph{new} evidence, not only selecting among existing candidates.
 
 \begin{figure*}[t]
     \centering
@@ -471,10 +474,10 @@ Our \sketch{} format is a neuro-symbolic decomposition---neural claim paired wit
 % ===========================================================================
 
 \paragraph{Output format as verification design.}
-Our results suggest a broader principle: \emph{the output format is a verification design choice}. By designing reasoning outputs to contain compositional, cross-validatable pathways, we convert format design into verification capability. While we have not validated this beyond geometry, the underlying mechanism---cross-channel agreement between structurally independent pathways---does not depend on geometric properties per se; any domain where reasoning can be decomposed into perception, logic, computation, and conclusion could benefit from compositional verification. The core insight is that structural diversity in outputs creates structural diversity in errors, which creates verification opportunity.
+Our results suggest a broader principle: \emph{the output format is a verification design choice}. By designing reasoning outputs to contain compositional, cross-validatable pathways, we convert format design into verification capability. Future validation beyond geometry would further test the breadth of this principle; nevertheless, the underlying mechanism---cross-channel agreement between structurally independent pathways---does not depend on geometric properties per se. Any domain where reasoning can be decomposed into perception, logic, computation, and conclusion could benefit from compositional verification. The core insight is that structural diversity in outputs creates structural diversity in errors, which creates verification opportunity.
 
 \paragraph{Scope and future work.}
-Our study focuses on open-weight multimodal models in geometry reasoning, where shared visual perception creates correlated symbolic errors. Extending the validation to proprietary frontier models and other neuro-symbolic domains is an important next step. CCV is also a selection method over an existing candidate pool; cases where all candidates share the same incorrect perceptual premise require generating new evidence rather than selecting among current candidates. This motivates future work on compositional recombination and independent premise verification.
+Our study focuses on open-weight multimodal models in geometry reasoning, where shared visual perception creates correlated symbolic errors. Extending the validation to proprietary frontier models and other neuro-symbolic domains is an important next step. CCV is a selection method over an existing candidate pool, so shared incorrect perceptual premises point to a complementary direction: compositional recombination and independent premise verification that can introduce new evidence before selection.
 
 % ===========================================================================
 \section{Conclusion}
@@ -597,7 +600,7 @@ Teacher NL CoT:
 \section{$\tau_{\text{exec}}$ Sensitivity}
 \label{app:tau-sensitivity}
 
-The only tunable hyperparameter in \ccv{} is the execution-majority threshold $\tau_{\text{exec}}$, used only when the $\kappa$-pool is empty. We sweep $\tau_{\text{exec}}=1\ldots16$ on the main Qwen3.5-9B s240 $K{=}16$ rollout pool, using the same split protocol as the main paper: Geometry3K qid$<300$ for dev, and Geometry3K qid$\geq300$ plus GeoQA, MathVista-GPS clean, and MathVista-GPS for heldout/OOD evaluation. We use the resulting $\tau_{\text{exec}}{=}9$ for both Qwen3.5-9B and Gemma4-E4B.
+The only tunable hyperparameter in \ccv{} is the execution-majority threshold $\tau_{\text{exec}}$, used only when the $\kappa$-pool is empty. We sweep $\tau_{\text{exec}}=1\ldots16$ on the main Qwen3.5-9B s240 $K{=}16$ rollout pool, using the same split protocol as the main paper: Geometry3K qid$<300$ for dev, and Geometry3K qid$\geq300$ plus GeoQA, MathVista-GPS clean, and MathVista-GPS for heldout/OOD evaluation. Figure~\ref{fig:tau-sensitivity} plots the full sweep, and Table~\ref{tab:tau-sensitivity} reports selected points. We use the resulting $\tau_{\text{exec}}{=}9$ for both Qwen3.5-9B and Gemma4-E4B.
 
 \begin{figure}[h]
     \centering
@@ -684,7 +687,7 @@ The Gemma4-E4B experiment uses the frozen checkpoint-720 LoRA adapter and the fr
 \section{$\kappa$ Matching Threshold Sensitivity}
 \label{app:kappa-threshold}
 
-The relation $X_i\approx Y_i$ is implemented by normalizing the claimed final answer and executed DSL answer, then applying numeric tolerance. Floating-point answers, fractions, square roots, and $\pi$ expressions are parsed to real values; degree symbols are treated as unit suffixes and removed before numeric comparison. For multiple-choice questions, numeric answers are first mapped to option letters using the fixed choice tolerance 0.02. In this ablation we keep the numeric absolute tolerance fixed at $10^{-3}$ and sweep only the candidate-level relative tolerance used for $\kappa$.
+The relation $X_i\approx Y_i$ is implemented by normalizing the claimed final answer and executed DSL answer, then applying numeric tolerance. Floating-point answers, fractions, square roots, and $\pi$ expressions are parsed to real values; degree symbols are treated as unit suffixes and removed before numeric comparison. For multiple-choice questions, numeric answers are first mapped to option letters using the fixed choice tolerance 0.02. Table~\ref{tab:kappa-threshold} reports an ablation that keeps the numeric absolute tolerance fixed at $10^{-3}$ and sweeps only the candidate-level relative tolerance used for $\kappa$.
 
 \begin{table}[h]
 \centering
@@ -709,20 +712,14 @@ All threshold settings yield identical results because geometry answers are effe
 \section{Qualitative Case Studies}
 \label{app:case-studies}
 
-We present four representative cases from the frozen Qwen3.5-9B s240 $K{=}16$, $T{=}0.8$ pool, selected to illustrate the four behavioral modes of \ccv{}: (1)~successful rescue when execution consensus is wrong but claim is correct, (2)~failure when both pathways agree on the wrong answer, (3)~false $\kappa$ due to correlated perception error, and (4)~fallback routing when no self-consistent candidate exists. Each case reports method outputs and the key DSL of the \ccv{}-selected candidate.
+We present four representative cases from the frozen Qwen3.5-9B s240 $K{=}16$, $T{=}0.8$ pool, selected to illustrate the four behavioral modes of \ccv{}: (1)~successful rescue when execution consensus is wrong but claim is correct, (2)~hard cases where both pathways agree on a wrong answer, (3)~correlated perception errors that produce incorrect agreement, and (4)~fallback routing when no self-consistent candidate exists. Each case reports method outputs and the key DSL of the \ccv{}-selected candidate.
 
 \subsection{CCV Rescue (Exec\ding{55}\,Claim\ding{51})}
 
 \texttt{geometry3k\_test} qid~325. Expected: B (16). Choices: A=12, B=16, C=51, D=65.
 
 \smallskip
-\begin{tabular}{lcccc}
-\toprule
-& Claim MV & Exec MV & EAV & \ccv{} \\
-\midrule
-Output & B & C & C & \textbf{B} \\
-\bottomrule
-\end{tabular}
+\noindent \textbf{Method outputs.} Claim MV: B; Exec MV: C; EAV: C; \ccv{}: \textbf{B}.
 \smallskip
 
 \noindent \textbf{CCV-selected DSL} ($\kappa=1$, claim cluster 9, exec cluster 6):
@@ -733,18 +730,12 @@ answer = x          # 16.25 -> B
 \end{verbatim}
 \ccv{} selects a $\kappa$-consistent candidate whose claim and execution agree on B, while EAV follows a wrong execution majority (C). This is the canonical recoverable failure: the neural pathway is correct but the symbolic pathway is corrupted by shared perception error.
 
-\subsection{CCV Failure (Exec\ding{55}\,Claim\ding{55})}
+\subsection{Hard Case: Exec\ding{55}\,Claim\ding{55}}
 
 \texttt{geometry3k\_test} qid~72. Expected: A (3). Choices: A=3, B=4, C=6, D=7.
 
 \smallskip
-\begin{tabular}{lcccc}
-\toprule
-& Claim MV & Exec MV & EAV & \ccv{} \\
-\midrule
-Output & B & B & B & B \\
-\bottomrule
-\end{tabular}
+\noindent \textbf{Method outputs.} Claim MV: B; Exec MV: B; EAV: B; \ccv{}: B.
 \smallskip
 
 \noindent \textbf{CCV-selected DSL} ($\kappa=1$, claim cluster 15, exec cluster 15):
@@ -752,20 +743,14 @@ Output & B & B & B & B \\
 x = 4
 answer = x          # 4.0 -> B
 \end{verbatim}
-All methods agree on the wrong answer. \ccv{} cannot rescue this case because the cross-channel agreement is itself wrong---both pathways share the same perceptual error.
+All methods agree on the wrong answer. This case sits outside selection-only verification because the cross-channel agreement is itself wrong---both pathways share the same perceptual error.
 
-\subsection{False $\kappa$ (Correlated Perception Error)}
+\subsection{Correlated Perception Error}
 
 \texttt{geometry3k\_test} qid~35. Expected: D (155). Choices: A=20, B=25, C=30, D=155.
 
 \smallskip
-\begin{tabular}{lcccc}
-\toprule
-& Claim MV & Exec MV & EAV & \ccv{} \\
-\midrule
-Output & B & B & B & B \\
-\bottomrule
-\end{tabular}
+\noindent \textbf{Method outputs.} Claim MV: B; Exec MV: B; EAV: B; \ccv{}: B.
 \smallskip
 
 \noindent \textbf{CCV-selected DSL} ($\kappa=1$, claim cluster 16, exec cluster 16):
@@ -775,20 +760,14 @@ arc_AD = 20
 angle_2 = (arc_BC + arc_AD) / 2
 answer = angle_2    # 25.0 -> B
 \end{verbatim}
-This is the characteristic \ccv{} failure mode: a correlated visual error makes both channels self-consistent around the wrong answer. With 16/16 candidates in both clusters, no diversity exists to break the false consensus.
+This is a boundary case for \ccv{}: a correlated visual error makes both channels self-consistent around the wrong answer. With 16/16 candidates in both clusters, selection alone has no alternative evidence to break the incorrect consensus.
 
 \subsection{Empty $\kappa$-Pool with Execution Fallback}
 
 \texttt{geometry3k\_test} qid~56. Expected: C (70). Choices: A=66, B=68, C=70, D=72.
 
 \smallskip
-\begin{tabular}{lcccc}
-\toprule
-& Claim MV & Exec MV & EAV & \ccv{} \\
-\midrule
-Output & D & C & C & \textbf{C} \\
-\bottomrule
-\end{tabular}
+\noindent \textbf{Method outputs.} Claim MV: D; Exec MV: C; EAV: C; \ccv{}: \textbf{C}.
 \smallskip
 
 \noindent \textbf{CCV-selected DSL} ($\kappa=0$, claim cluster 10, exec cluster 16):
@@ -860,8 +839,13 @@ Under the uniform-dispersion approximation, as the effective answer space $M$ gr
 \subsection{Numerical illustration}
 \label{app:numerical}
 
-We instantiate the SNR proxy using measured post-hoc statistics from the full dataset. Failed executions are counted as incorrect; correlations are Pearson correlations over ordered within-question candidate pairs. Raw exec voting uses $K=16$, $p_e=0.617$, and $\rho_e=0.526$. The retained pool has mean size $K_\kappa=9.09$, $p_\kappa=0.871$, and $\rho_\kappa=0.646$.
-\begin{center}
+We instantiate the SNR proxy using measured post-hoc statistics from the full dataset. Failed executions are counted as incorrect; correlations are Pearson correlations over ordered within-question candidate pairs. Raw exec voting uses $K=16$, $p_e=0.617$, and $\rho_e=0.526$. The retained pool has mean size $K_\kappa=9.09$, $p_\kappa=0.871$, and $\rho_\kappa=0.646$. Table~\ref{tab:numerical-snr} summarizes the resulting SNR proxy values.
+
+\begin{table}[h]
+\centering
+\caption{Measured statistics for the one-vs-rest SNR proxy.}
+\label{tab:numerical-snr}
+\small
 \begin{tabular}{lcccc}
 \toprule
 Method & $n$ & $p$ & $\rho$ & SNR \\
@@ -870,7 +854,7 @@ Raw exec MV & 16 & 0.617 & 0.526 & 0.32 \\
 $\kappa$-filtered MV & 9.09 & 0.871 & 0.646 & 1.33 \\
 \bottomrule
 \end{tabular}
-\end{center}
+\end{table}
 The retained pool is therefore 23\% more correlated, but the SNR proxy improves by $4.1\times$. This empirical regime is exactly the counterintuitive case captured by Theorem~\ref{thm:snr}: precision filtering dominates the correlation penalty. The observed false self-consistency rate is 12.9\%, so most $\kappa{=}1$ candidates correspond to true rather than accidental agreement.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
