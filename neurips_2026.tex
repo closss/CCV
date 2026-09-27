@@ -75,6 +75,7 @@
 \newcommand{\ccv}{\textsc{CCV}}
 \newcommand{\kgated}{$\kappa$-gated}
 \newcommand{\pp}{\,\text{pp}}
+\newcommand{\recheck}[1]{\textcolor{red}{#1}}
 
 \newtheorem{proposition}{Proposition}
 \newtheorem{theorem}{Theorem}
@@ -94,9 +95,11 @@
 
 % ===========================================================================
 \begin{abstract}
-% ===========================================================================
+% User-supplied abstract retained verbatim apart from TeX typography and red aggregate markers.
+% AUTHOR CHECK: its independence, four-benchmark, inference-cost, and domain-scope wording
+% conflicts with the revised body; see task/revision_notes.md and checklist item 1.
 
-Multimodal geometry reasoning requires models to jointly perceive diagrams and perform symbolic derivations. Test-time verification methods such as majority voting assume voter errors are roughly independent, but in geometry this assumption breaks down: all candidates perceive the same diagram, so perceptual biases cascade into correlated errors that produce confident but wrong consensus. We observe that neuro-symbolic candidates contain compositional structure that can serve as a verification resource. We introduce \sketch{}, a format decomposing each candidate into a neural pathway (natural-language claim) and a symbolic pathway (visual grounding $\rightarrow$ typed DSL $\rightarrow$ deterministic execution). These pathways are governed by different error processes---symbolic errors are correlated across candidates through shared perception, while neural errors are more dispersed. Our method, Compositional Consensus Verification (\ccv{}), gates consensus on cross-channel agreement: because the two pathways fail for different reasons, accidental agreement is rare, making each concordant vote far more precise than a raw majority vote. Across four geometry benchmarks, \ccv{} achieves 81.0\% accuracy (+10.4 pp over majority voting) without external scorers or additional inference. Seven non-compositional baselines---including trained PRMs---cluster at 70--71\%, while compositional cross-layer features jump to 79--81\%, confirming that structural diversity is the core verification resource, and that a principled gating algorithm effectively unlocks its potential.
+Multimodal geometry reasoning requires jointly perceiving diagrams and performing symbolic derivations. Test-time verification methods such as majority voting assume voter errors are roughly independent, but in geometry all candidates perceive the same diagram, so perceptual biases cascade into correlated errors that produce confident but wrong consensus---repeating a vote within one channel cannot escape a shared misperception. To expose a structurally independent signal, we standardize each candidate into SKETCH, a format that decomposes reasoning into a neural pathway (natural-language claim) and a symbolic pathway (visual grounding $\rightarrow$ typed program $\rightarrow$ deterministic execution). Because these two pathways fail through different error processes, their agreement carries information that within-channel repetition cannot. Compositional Consensus Verification (CCV), our training-free verifier, gates consensus on this cross-pathway agreement---a precision filter that retains only candidates whose two pathways independently converge, making each concordant vote far more reliable than a raw majority vote. Across four geometry benchmarks, CCV reaches \recheck{81.0\%} accuracy (\recheck{+10.4} pp over majority voting) with no external scorers or extra inference, and transfers to a second model family (\recheck{+7.8} pp). Seven non-compositional baselines---including trained reward models---cluster at \recheck{70--71\%}, while cross-channel methods jump to \recheck{79--81\%}, confirming that structural diversity, not more votes, is the core verification resource.
 
 \end{abstract}
 
@@ -108,36 +111,50 @@ Multimodal geometry reasoning requires models to jointly perceive diagrams and p
 \begin{figure}[t]
     \centering
     \includegraphics[width=\linewidth]{figures/figure1.pdf}
-    \caption{\textbf{CCV architecture overview.} A geometry problem is processed to sample $K{=}16$ \sketch{} candidates. Each candidate exposes a symbolic reasoning pathway (visual grounding $\rightarrow$ typed DSL $\rightarrow$ execution) and a neural intuition pathway (claim). Cross-channel agreement $\kappa$ acts as a precision filter to gate consensus; when agreement collapses, the system falls back to execution or claim majority.}
+    \caption{\textbf{CCV architecture overview.} A geometry problem is processed to sample $K{=}16$ \sketch{} candidates. Each candidate exposes a symbolic reasoning pathway (visual grounding $\rightarrow$ a typed domain-specific language (DSL) $\rightarrow$ execution) and a neural intuition pathway (claim). Cross-channel agreement $\kappa$ acts as a precision filter to gate consensus; when agreement collapses, the system falls back to execution or claim majority. Execution is performed externally after generation; the claim sees the DSL source but not its executed output.}
     \label{fig:method-overview}
 \end{figure}
 
 \paragraph{The verification bottleneck in geometry reasoning.}
-Geometry reasoning differs from purely textual mathematical tasks in a fundamental way: it requires joint visual perception and symbolic derivation. A model must read spatial relationships from a diagram---angles, parallel lines, congruences---and then chain these percepts through multi-step logical deductions. This conjunction makes geometry a task that current vision-language models find difficult~\cite{gao2023g,xia2024geox,zhang2024mavis}, and it also creates a distinctive failure mode for test-time verification. Figure~\ref{fig:method-overview} summarizes our proposed solution.
+Geometry reasoning differs from purely textual mathematical tasks in a fundamental way: it requires joint visual perception and symbolic derivation. A model must read spatial relationships from a diagram---angles, parallel lines, congruences---and then chain these percepts through multi-step logical deductions. This conjunction makes geometry a task that current vision-language models (VLMs) find difficult~\citep{gao2023g,xia2024geox,zhang2024mavis}, and it also creates a distinctive failure mode for test-time verification. Figure~\ref{fig:method-overview} summarizes our proposed solution.
 
-The standard approach for improving reasoning accuracy at test time is self-consistency~\cite{wang2022self}: sample $K$ candidates and select the most frequent answer via majority voting (MV). This rests on the Condorcet assumption that voter errors are approximately independent, so that the majority converges to truth as $K$ grows. In geometry, this assumption breaks down in a specific and measurable way. All $K$ candidates perceive the \emph{same} diagram; if the model harbors a systematic perceptual bias---misidentifying a perpendicular as supplementary, or misreading an angle label---then a majority of candidates will share the same error. Votes become correlated because they reflect the same perceptual errors. Formally, when the pairwise error correlation $\rho$ is substantial, the effective sample size degrades as $N_{\text{eff}} = K / (1 + (K{-}1)\rho)$~\cite{ladha1992condorcet,nitarach2026model}. At $\rho = 0.5$, sixteen candidates carry the information of barely two independent votes. In our experiments, wrong execution consensus clusters of size 8--16 account for 86\% of all verification failures---strong majorities that are confidently wrong because they derive from the same misperceived geometric facts.
+The standard approach for improving reasoning accuracy at test time is self-consistency~\citep{wang2022self}: sample $K$ candidates and select the most frequent answer via majority voting (MV). A classical Condorcet justification assumes independent, sufficiently accurate voters, so that binary majority reliability improves as $K$ grows. In geometry, this assumption breaks down in a specific and measurable way. All $K$ candidates perceive the \emph{same} diagram; if the model harbors a systematic perceptual bias---misidentifying a perpendicular as supplementary, or misreading an angle label---then a majority of candidates will share the same error. Votes become correlated because they reflect the same perceptual errors. Formally, when the pairwise error correlation $\rho$ is substantial, the effective sample size degrades as $N_{\text{eff}} = K / (1 + (K{-}1)\rho)$~\citep{ladha1992condorcet,nitarach2026model}. At $\rho = 0.5$, sixteen candidates carry the information of barely two independent votes. In our experiments, wrong execution consensus clusters of size 8--16 account for \recheck{86\%} of the execution-first baseline failures with an oracle-correct candidate analyzed in Section~\ref{sec:errors}---strong majorities that are confidently wrong because they derive from the same misperceived geometric facts.
 
 \paragraph{Compositional structure as a verification resource.}
-Since the problem is within-channel error correlation, a natural response is to seek a structurally independent verification signal. We observe that neuro-symbolic reasoning candidates are not opaque votes. Unlike standard chain-of-thought outputs---a single text sequence mapping to a single answer---a neuro-symbolic candidate decomposes into layers with distinct computational character:
+Since the problem is within-channel error correlation, a natural response is to seek a verification signal from a structurally different computation. We observe that neuro-symbolic reasoning candidates are not opaque votes. Unlike standard chain-of-thought (CoT) outputs---a single text sequence mapping to a single answer---a neuro-symbolic candidate decomposes into layers with distinct computational character:
 \begin{equation}
     \text{Candidate} = \big(\underbrace{\text{VGF}}_{\text{perception}},\ \underbrace{\text{DSL}}_{\text{logic}},\ \underbrace{\text{exec}}_{\text{computation}},\ \underbrace{\text{claim}}_{\text{intuition}}\big)
     \label{eq:candidate}
 \end{equation}
-where VGF (Visual Grounding Facts) captures geometric relations extracted from the diagram, DSL is a typed program encoding the reasoning steps, exec is its deterministic execution result, and claim is the model's stated answer.
+where VGF (Visual Grounding Facts) captures geometric relations extracted from the diagram, DSL (domain-specific language) is a typed program encoding the reasoning steps, exec is its deterministic execution result, and claim is the model's stated answer.
 
-The claim and exec arise from \emph{structurally different pathways}. The claim is produced by the neural pathway---the model's implicit reasoning, subject to the dispersed noise of autoregressive generation. The execution result is produced by the symbolic pathway---a deterministic computation on extracted premises, subject to the correlated noise of shared visual perception. These two pathways have different error correlation structures: neural errors are relatively independent across candidates, while symbolic errors are highly correlated because candidates see the same diagram.
+Each candidate is generated in a single autoregressive pass in the order \texttt{[VGF]} $\rightarrow$ \texttt{[DSL]} $\rightarrow$ \texttt{[Final Answer]}; an external sandboxed interpreter executes the DSL only after generation. Thus the claim is conditioned on the DSL source, but not on its execution output. The recorded section order follows this sequence for \recheck{27,342/27,344} candidates. The claim and execution therefore share both visual premises and generated program context; their structural difference does not imply statistical independence.
 
-Existing verification paradigms overlook this structural difference. \emph{Consensus methods} (MV, self-consistency, CISC) count votes within a single output layer, making them vulnerable to within-layer error correlation. \emph{Learned verifiers} (ORM, PRM, VisualPRM) train an external model to score candidates, which requires domain-specific training data and adds inference cost. Neither paradigm exploits the compositional structure that is already present in the candidates. We propose a third approach: \textbf{compositional verification}, which derives verification signal from cross-pathway agreement within the candidates themselves.
+Existing verification paradigms do not directly use this within-candidate comparison. \emph{Consensus methods}, including confidence-informed self-consistency (CISC), aggregate answers within one output channel. \emph{Learned verifiers}, including outcome reward models (ORMs), process reward models (PRMs), and their visual counterparts, train an external scorer. We instead use \textbf{compositional verification}: compare the neural claim with the externally computed program result, then use agreement to gate consensus.
 
 \paragraph{The cross-channel verification principle.}
-We formalize the following principle. Consider two verification channels $C_1$ (claim) and $C_2$ (exec), each providing noisy evidence about the correct answer $z^*$. Let $\rho_1, \rho_2$ denote the pairwise error correlations within each channel.
+\textbf{Principle.} \emph{Agreement improves the precision of retained execution votes exactly when it is more likely for correct executions than for incorrect executions.} This likelihood-ratio condition permits positively correlated channels and does not guarantee an improvement in pool-level voting accuracy (Section~\ref{sec:precision}).
 
-\textbf{Principle (Cross-Channel Verification).} \emph{When within-channel error correlations are high ($\rho_2 \gg 0$), a single instance of cross-channel agreement---one candidate where $C_1$ and $C_2$ independently converge to the same answer---provides stronger evidence for correctness than $k$ instances of within-channel consensus, for any $k$ bounded by the effective sample size $K/(1+(K{-}1)\rho_2)$.}
+The full-pool estimate is $P(\text{exec correct}\mid\text{claim correct})=\recheck{0.736}$, above the marginal execution accuracy $p_e=\recheck{0.617}$: the channels are positively correlated. Table~\ref{tab:coupling} distinguishes this within-candidate coupling from correlation between candidates. Agreement can still be useful because it selects correct executions at a higher rate than incorrect ones, rather than because false agreement is necessarily uncommon.
 
-Within-channel consensus can be inflated by shared errors (all candidates misread the same angle), but cross-channel agreement requires two structurally different noise processes to simultaneously produce the same answer. The probability of this occurring by chance is governed by the cross-channel error coupling, which we empirically measure at $P(\text{exec correct} \mid \text{claim correct}) \approx 0.225$---far lower than the within-channel consensus rates, confirming that the two pathways are only weakly coupled.
+\begin{table}[t]
+\centering
+\caption{Channel coupling in the Qwen candidate pool. The within-question mean $\phi$ uses questions with nonconstant claim and execution correctness; failed executions ($\bot$) count as incorrect. $\rho_e$ measures a different quantity: execution-correctness correlation between candidates. All red statistics await recomputation after removing GPS-full from the main aggregate.}
+\label{tab:coupling}
+\small
+\begin{tabular}{lc}
+\toprule
+Statistic & Value \\
+\midrule
+Mean within-question claim--exec correctness correlation $\phi$ & \recheck{0.325} \\
+Questions with defined $\phi$ & \recheck{766} \\
+Within-channel execution correctness correlation $\rho_e$ & \recheck{0.526} \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \paragraph{Contributions.}
-This paper turns the internal structure of neuro-symbolic candidates into a test-time verification signal. We introduce the \sketch{} format, which decomposes geometry reasoning into VGF, typed DSL, deterministic execution, and a neural claim while maintaining $>$99.9\% format compliance with a 9B VLM. Building on this structure, we propose \ccv{}, a training-free verifier that gates scoring and output routing through claim--execution agreement, improving over MV by $+10.41\pp$ across four benchmarks with no additional inference. The same fixed protocol transfers to Gemma4-E4B, yielding $+7.84\pp$ over Claim MV, and a failure taxonomy shows why: $\kappa$-gating recovers 88.5\% of the dominant failure subtype where symbolic consensus fails but neural intuition holds.
+This paper makes the structure of neuro-symbolic candidates available for verification through \sketch{}, a format exposing visual facts, a typed program, its execution, and a neural claim. The generator requires teacher-assisted reformatting and low-rank adaptation (LoRA) supervised fine-tuning (SFT), achieving $>$\recheck{99.9\%} format compliance with a 9B VLM. Given an existing \sketch{} pool, \ccv{} is a training-free verifier requiring no additional model calls. Its reported gain over MV is \recheck{$+10.41\pp$} across three benchmarks, with GPS-full reported for reference; the aggregate awaits recomputation under this non-overlapping protocol. The same fixed verification protocol yields \recheck{$+7.84\pp$} on Gemma4-E4B. We characterize both recoveries and regressions, and give an exact condition for candidate-level precision improvement without assuming channel independence.
 
 % ===========================================================================
 \section{The \sketch{} Format}
@@ -158,11 +175,11 @@ The closed vocabulary ensures parseability and enables direct cross-candidate co
 \paragraph{Typed DSL.}
 The DSL is a restricted Python subset that derives the answer from VGF-grounded premises using geometry helper functions and standard mathematical operations ($\sqrt{\cdot}$, trigonometric functions, $\pi$, etc.). Restricting the subset---no imports, no I/O, no loops---ensures termination and deterministic execution, which is essential for the symbolic pathway to produce a reliable verification signal. Every program terminates with an explicit \texttt{answer = ...} assignment, so the execution result can be extracted automatically without answer parsing.
 
-\paragraph{Closed-loop structure.}
-The key property of the \sketch{} format is that each candidate carries an intrinsic verification signal: whether its neural claim agrees with its symbolic execution. This signal exists because the format closes the loop: VGF provides premises $\rightarrow$ DSL reasons from premises $\rightarrow$ exec produces a deterministic result $\rightarrow$ claim states the model's answer. When claim $\approx$ exec (compositional consistency, $\kappa{=}1$), the neural and symbolic pathways have independently converged, providing evidence that the answer is correct without any external reference.
+\paragraph{Generation and external execution.}
+The model emits visual facts, the DSL source, and its final claim sequentially in one decode. The interpreter then executes the completed program outside the model. The resulting claim--execution comparison closes a verification loop after generation; it is not a second independently generated solution. Compositional consistency ($\kappa=1$) supplies a useful precision filter when agreement is more likely on correct executions, as formalized below.
 
 \paragraph{Training.}
-We fine-tune Qwen3.5-9B with LoRA ($r{=}8$, $\alpha{=}16$) on 2,012 geometry examples derived from the Geometry3K~\cite{lu2021inter} training split. We use the geometry3k subset of NVIDIA Nemotron-Image-Training-v3~\cite{blakeman2025nvidia}, which provides 2,078 CoT annotations generated by Qwen3-VL-235B. Each CoT trace is reformatted into VGF+DSL structure by DeepSeek V4 Pro. The resulting model achieves format compliance $>$99.9\%, VGF parse success $>$98.7\%, and DSL execution success $>$94.5\% on test data.
+We fine-tune Qwen3.5-9B with LoRA ($r{=}8$, $\alpha{=}16$) on 2,012 geometry examples derived from the Geometry3K~\citep{lu2021inter} training split. We use the geometry3k subset of NVIDIA Nemotron-Image-Training-v3~\citep{blakeman2025nvidia}, which provides 2,078 CoT annotations generated by Qwen3-VL-235B. Each CoT trace is reformatted into VGF+DSL structure by DeepSeek V4 Pro. The resulting model achieves format compliance $>$\recheck{99.9\%}, VGF parse success $>$\recheck{98.7\%}, and DSL execution success $>$\recheck{94.5\%} on test data.
 
 % ===========================================================================
 \section{Compositional Consensus Verification}
@@ -191,46 +208,66 @@ which checks whether a single candidate's neural and symbolic pathways agree. Ad
 \begin{equation}
     G_\kappa(z) = \sum_i \mathbf{1}[\text{exec}_i = z] \cdot \kappa_i
 \end{equation}
-Only execution votes from self-consistent candidates count. This is the signal that \ccv{}'s scoring function is built on.
+Here only execution votes from self-consistent candidates count. CCV uses a related candidate-level gate: it restricts selection to self-consistent candidates and scores their claim and execution cluster support (Algorithm~\ref{alg:ccv}). Its execution-cluster size counts the full pool; it is not identical to $G_\kappa$.
 
 \subsection{The Cross-Channel Verification Advantage}
+\label{sec:precision}
 
-For notational simplicity, this subsection writes claim--exec agreement as equality; in implementation, $\kappa_i$ uses approximate numeric matching and excludes failed executions.
+For clarity, this analysis writes agreement as equality after answer normalization. The implementation uses approximate numeric matching and excludes failed executions from agreement. All probabilities refer to the same candidate distribution; no independence between channels or between candidates is assumed in the following precision results.
 
-\begin{theorem}[Cross-channel agreement as a precision filter]
+\begin{theorem}[Agreement precision identity]
 \label{thm:accuracy}
-Let $X_i$ be the claim answer and $Y_i$ the executed answer for candidate $i$, and let $z^*$ be the correct answer. Define $\kappa_i=\mathbf{1}[X_i=Y_i]$, $t_\kappa=P(X_i=Y_i=z^*)$, and $f_\kappa=P(X_i=Y_i\neq z^*)$. Then the accuracy of self-consistent candidates satisfies the identity
+Let $X_i$ be the claim, $Y_i$ the execution result, and $z^*$ the correct answer. Define $\kappa_i=\mathbf{1}[X_i=Y_i,\,Y_i\neq\bot]$, $t_\kappa=P(\kappa_i=1,Y_i=z^*)$, and $f_\kappa=P(\kappa_i=1,Y_i\neq z^*)$. If $P(\kappa_i=1)>0$, then
 \begin{equation}
-    p_\kappa \triangleq P(Y_i=z^* \mid \kappa_i=1) = \frac{t_\kappa}{t_\kappa+f_\kappa}.
+    p_\kappa \triangleq P(Y_i=z^*\mid\kappa_i=1)
+    =\frac{t_\kappa}{t_\kappa+f_\kappa}.
+    \label{eq:precision-identity}
 \end{equation}
-Under an idealized shared-perception model where the exec pathway depends on a latent visual state $V$, the claim pathway is conditionally independent of exec, and false agreement is dispersed across $M{-}1$ wrong answers, $t_\kappa=p_c p_e$ and $p_\kappa>p_e$ whenever $p_c>1/M$.
 \end{theorem}
 
-The theorem isolates the central mechanism: $\kappa$-gating is primarily a \emph{precision filter}. It does not require repeated votes in the same channel; it requires two structurally different pathways to converge to the same answer. When the answer space is large, as in numerical geometry, false self-consistency $f_\kappa$ is rare, so a retained vote has much higher precision than a raw execution vote.
+\begin{proposition}[Likelihood-ratio condition]
+\label{prop:likelihood}
+Let $p_e=P(Y_i=z^*)$ with $0<p_e<1$ and $P(\kappa_i=1)>0$. Write $a=P(\kappa_i=1\mid Y_i=z^*)$ and $b=P(\kappa_i=1\mid Y_i\neq z^*)$. Then
+\begin{equation}
+    p_\kappa>p_e \quad\Longleftrightarrow\quad a>b.
+    \label{eq:likelihood-condition}
+\end{equation}
+For $b>0$, the exact posterior-odds identity is
+\begin{equation}
+    \frac{p_\kappa}{1-p_\kappa}
+    =\frac{p_e}{1-p_e}\,\frac{a}{b}.
+    \label{eq:posterior-odds}
+\end{equation}
+\end{proposition}
+
+This condition allows substantial false agreement. On Gemma4-E4B, \recheck{40.2\%} of retained candidates are falsely concordant, yet retention raises execution precision from \recheck{33.4\%} to \recheck{59.8\%}. The diagnostic is the relative retention rate for correct versus incorrect executions, not an assumption that incorrect answers are dispersed. Appendix~\ref{app:proofs} gives the proofs and measured likelihood ratios.
 
 \begin{theorem}[One-vs-rest SNR approximation]
 \label{thm:snr}
-In a one-vs-rest binary correctness approximation, majority reliability depends on per-vote accuracy $p$, pool size $n$, and pairwise correctness correlation $\rho$ through
+For $n$ exchangeable binary correctness indicators with mean $p$ and pairwise correlation $\rho$, a positive variance gives the signal-to-noise ratio (SNR)
 \begin{equation}
     \mathrm{SNR}(p,n,\rho)=\frac{p-\tfrac{1}{2}}{\sqrt{p(1-p)(1+(n-1)\rho)/n}}.
 \end{equation}
-The $\kappa$-filtered pool improves over raw exec voting whenever the precision gain from filtering outweighs the combined penalty of smaller pool size and higher correlation (full condition in Appendix~\ref{app:proofs}).
+Using this quantity to compare voting reliability is a one-vs-rest approximation. A higher filtered-pool SNR requires the precision improvement to offset changes in retained pool size and correlation; the comparison and its assumptions are given in Appendix~\ref{app:proofs}.
 \end{theorem}
 
-This yields a testable, counterintuitive prediction: $\kappa$-gating need not reduce correlation to improve majority reliability. Precision filtering can dominate the correlation penalty. This complements the negative findings of \cite{nitarach2026model} on diverse prompting: when errors arise from shared perception, decorrelating samples is the wrong lever---filtering for cross-channel agreement targets precision directly.
+\textbf{Candidate precision does not imply a pool-level voting gain.} Filtering can leave too few candidates, preserve correlated wrong answers, or change which answer wins a multiclass vote. Neither Proposition~\ref{prop:likelihood} nor the SNR approximation guarantees that \ccv{} improves on a given question or candidate pool. The SNR also does not model \ccv{}'s weighted scoring and fallback branches.
 
-\textbf{Empirical support.} We directly measure within-question correctness correlations on the full dataset (1,709 questions $\times$ 16 candidates). Raw exec votes have pairwise correlation $\rho_e=0.526$; $\kappa$-filtered votes have higher correlation $\rho_\kappa=0.646$. Yet per-candidate accuracy jumps from 61.7\% to 87.1\%, and the one-vs-rest SNR proxy improves by $4.1\times$ (0.32 to 1.33). Figure~\ref{fig:precision-filtering} visualizes this precision-filtering regime. Thus the retained pool is more correlated, but substantially more reliable---directly validating the counterintuitive prediction of Theorem~\ref{thm:snr}: precision filtering dominates even when it increases correlation. This confirms that the dominant mechanism is precision filtering, not decorrelation: the $\kappa_i\cdot|\text{exec\_cluster}_i|$ term in Algorithm~\ref{alg:ccv} counts consensus only after it has survived cross-channel agreement.
+\textbf{Empirical diagnostic.} In the original aggregate of \recheck{1,709} questions with 16 candidates each, execution correctness correlation is $\rho_e=\recheck{0.526}$ and retained-pool correlation is $\rho_\kappa=\recheck{0.646}$. Candidate precision increases from \recheck{61.7\%} to \recheck{87.1\%}, while the SNR proxy rises from \recheck{0.32} to \recheck{1.33} (\recheck{$4.1\times$}). These statistics illustrate a precision gain despite increased correlation; the pool-level gains are empirical results evaluated separately in Section~\ref{sec:experiments}. All aggregate statistics in red retain their original values pending removal of the overlapping GPS-full reference set.
+
+\paragraph{A deployment pretest.}
+Before using $\kappa$ filtering in a new setting, estimate $a/b$ on a labeled candidate pool and inspect question-stratified results. A ratio near one predicts little candidate-level precision benefit; a ratio above one supports precision filtering but still requires a separate pool-level evaluation.
 
 \begin{figure}[t]
     \centering
     \includegraphics[width=\linewidth]{figures/precision.pdf}
-    \caption{\textbf{Cross-channel precision filtering.} Left: $\kappa$-gating keeps candidates where claim and execution agree. True agreement occupies the claim-correct/exec-correct quadrant, while false agreement is dispersed across many wrong answers. Right: empirically, the $\kappa$-filtered pool is more correlated than raw execution votes, but its much higher precision yields a $4.1\times$ SNR improvement.}
+    \caption{\textbf{Cross-channel precision filtering.} Left: $\kappa$ retains claim--execution agreement, which may be either true or false. Precision improves when correct executions are retained more often than incorrect ones, without an answer-dispersion assumption. Right: in the original aggregate, higher retained precision accompanies higher correlation and a \recheck{$4.1\times$} SNR-proxy improvement. Embedded statistics await the same aggregate recomputation as the red text.}
     \label{fig:precision-filtering}
 \end{figure}
 
 \subsection{\kgated{} Dual-Pathway \ccv{}}
 
-Algorithm~\ref{alg:ccv} summarizes CCV. It uses claim-execution agreement as a precision gate, conceptually related to program-based consistency filtering~\cite{toh2024not}, but differs by combining agreement-gated consensus with output-pathway routing. The algorithm applies cross-channel agreement as a gate at two levels:
+Algorithm~\ref{alg:ccv} summarizes CCV. It uses claim-execution agreement as a precision gate, conceptually related to program-based consistency filtering~\citep{toh2024not}, but differs by combining agreement-gated consensus with output-pathway routing. The algorithm applies cross-channel agreement as a gate at two levels:
 
 \begin{algorithm}[h]
 \caption{$\kappa$-gated Dual-Pathway CCV}
@@ -257,9 +294,9 @@ Algorithm~\ref{alg:ccv} summarizes CCV. It uses claim-execution agreement as a p
 
 \paragraph{Candidate scoring (Lines 2--3).} The term $\kappa_i \cdot |\text{exec\_cluster}_i|$ realizes agreement-gated consensus: execution consensus is trusted only when accompanied by cross-layer agreement. The term $0.5 \cdot |\text{claim\_cluster}|$ provides a baseline surface signal. Raw execution cluster size receives zero weight---our learned ablation in Section~\ref{sec:learned} confirms this design choice.
 
-\paragraph{Output pathway routing (Lines 6--12).} When self-consistent candidates exist ($\mathcal{C}_\kappa$ is non-empty), the algorithm outputs the neural claim. When cross-layer agreement collapses globally, it falls back to symbolic execution consensus, but only if the execution cluster is sufficiently large ($\geq \tau_{\text{exec}}$). This routing treats the \emph{absence} of cross-channel agreement as diagnostic: it signals that the neural pathway is unreliable, making the deterministic symbolic pathway more trustworthy.
+\paragraph{Output pathway routing (Lines 6--12).} When self-consistent candidates exist ($\mathcal{C}_\kappa$ is non-empty), the algorithm outputs the neural claim. When cross-layer agreement collapses globally, it falls back to symbolic execution consensus, but only if the execution cluster is sufficiently large ($\geq \tau_{\text{exec}}$). An empty agreement pool does not identify which channel is wrong; the execution threshold is a heuristic fallback, and the regressions in Section~\ref{sec:errors} show its limits.
 
-\textbf{Complexity.} $O(K)$ time, zero additional model calls, one tunable parameter ($\tau_{\text{exec}}$).
+\textbf{Complexity and scope.} Aggregation takes $O(K)$ time after answer normalization and clustering. On an existing \sketch{} candidate pool, verification requires no additional model calls; the generator still requires LoRA SFT and teacher-assisted reformatting, so \ccv{} is not a drop-in verifier for arbitrary unstructured pools. Aggregation costs 2--4 ms per question on one CPU core (\recheck{4--7 s} for the original pool); external DSL execution is shared with execution-based baselines. Appendix~\ref{app:costs} separates these costs from generator training and external scoring. We select $\tau_{\text{exec}}$ on development data and examine the other fixed matching and scoring constants in Appendix~\ref{app:constants}.
 
 % ===========================================================================
 \section{Experiments}
@@ -272,61 +309,65 @@ Algorithm~\ref{alg:ccv} summarizes CCV. It uses claim-execution agreement as a p
 
 \begin{table}[h]
 \centering
-\caption{Test benchmark suite. We evaluate on one in-distribution benchmark and three held-out/OOD settings.}
+\caption{Test benchmark suite: three primary benchmarks and a reference superset. MathVista GPS denotes its geometry problem solving subset; GPS-clean is a strict subset of GPS-full. OOD denotes out-of-distribution evaluation.}
 \label{tab:benchmarks}
 \small
 \begin{tabular}{lccc}
 \toprule
 Benchmark & Lang. & $N$ & Role \\
 \midrule
-Geometry3K test~\cite{lu2021inter} & EN & 601 & In-distribution \\
-GeoQA test~\cite{chen2021geoqa} & ZH & 754 & Cross-lingual OOD \\
-MathVista-GPS clean~\cite{lu2023mathvista} & EN & 146 & Cross-domain OOD \\
-MathVista-GPS~\cite{lu2023mathvista} & EN & 208 & Reference \\
+Geometry3K test~\citep{lu2021inter} & EN & 601 & In-distribution \\
+GeoQA test~\citep{chen2021geoqa} & ZH & 754 & Cross-lingual OOD \\
+MathVista-GPS clean (GPS-c)~\citep{lu2023mathvista} & EN & 146 & Cross-domain OOD \\
+MathVista-GPS (GPS-full)~\citep{lu2023mathvista} & EN & 208 & \shortstack{Reference\\(superset of GPS-clean)} \\
 \bottomrule
 \end{tabular}
+\par\smallskip
+\begin{minipage}{\linewidth}\footnotesize
+GPS-clean contains 146 of the 208 GPS-full questions. GPS-full is reported separately and is excluded from the main aggregate to avoid duplicate counting.
+\end{minipage}
 \end{table}
 
-\paragraph{Evaluation protocol.} Table~\ref{tab:benchmarks} summarizes our evaluation suite. We use a frozen-rollout protocol with $K{=}16$ candidates, temperature $0.8$, and top-$p$ $0.95$. All verification methods operate on the same rollout pool. The single hyperparameter $\tau_{\text{exec}}{=}9$ was selected on a 300-question development split of Geometry3K and held fixed across all benchmarks and models.
+\paragraph{Evaluation protocol.} Table~\ref{tab:benchmarks} summarizes three primary benchmarks: Geometry3K test, GeoQA test, and GPS-clean, with GPS-full reported for reference. ``All'' aggregates only the three primary sets; heldout/OOD uses Geometry3K qid$\geq300$, GeoQA test, and GPS-clean, excluding both the Geometry3K dev split (qid$<300$) and GPS-full. Red values preserve original overlapping-pool statistics and await recomputation; they are not recomputed estimates for the revised aggregate. We use a frozen-rollout protocol with $K{=}16$ candidates, temperature $0.8$, and top-$p$ $0.95$. All verification methods operate on the same rollout pool, denoted s240 for the frozen Qwen rollout pool. The execution fallback threshold $\tau_{\text{exec}}{=}9$ was selected on a 300-question development split of Geometry3K and held fixed across all benchmarks and models.
 
 \subsection{Main Results}
 
 \begin{figure*}[t]
     \centering
     \includegraphics[width=0.72\textwidth]{figures/figure3.pdf}
-    \caption{\textbf{Evidence ladder and $K$ scaling.} Surface and confidence-based selectors cluster near 70--71\%, execution-only methods improve moderately, and cross-layer compositional verification produces the main jump to 79--81\%. As $K$ increases, the \ccv{} gain over Claim MV grows, indicating that compositional verification unlocks additional rollout diversity.}
+    \caption{\textbf{Evidence ladder and $K$ scaling.} Surface and confidence-based selectors cluster near \recheck{70--71\%}, execution-only methods improve moderately, and cross-layer compositional verification produces the main jump to \recheck{79--81\%}. As $K$ increases, the \ccv{} gain over Claim MV grows, indicating that compositional verification unlocks additional rollout diversity. Embedded aggregate statistics await recomputation without GPS-full.}
     \label{fig:evidence-scaling}
 \end{figure*}
 
-Figure~\ref{fig:evidence-scaling} visualizes the same evidence ladder and $K$-scaling trend, while Table~\ref{tab:main} reports the full benchmark breakdown. The four surface and confidence-based selectors---Claim MV, logprob-weighted MV, CISC, and URSA-RM weighted MV---all lie in a narrow 70.57--71.39\% band, despite spanning self-confidence weighting and an external learned PRM. The learned ablation in Section~\ref{sec:learned} confirms this ceiling extends to logprob-based best-of-$N$ and learned surface+execution feature selectors. Even URSA-RM, the strongest external scorer, achieves only $+0.76\pp$ over Claim MV when used for weighted voting. Execution-only methods improve to 74--76\%, but the large jump appears only when cross-layer agreement is used as a compositional signal: a PROVE-style $\kappa$ filter reaches 79.52\%, and \ccv{} reaches 80.98\%, a $+10.41\pp$ improvement over Claim MV and $+4.80\pp$ over EAV.
+Execution-Answer Voting (EAV) is the execution-first priority baseline. Figure~\ref{fig:evidence-scaling} visualizes the same evidence ladder and $K$-scaling trend, while Table~\ref{tab:main} reports the full benchmark breakdown. The four surface and confidence-based selectors---Claim MV, logprob-weighted MV, CISC, and URSA-RM weighted MV---all lie in a narrow \recheck{70.57--71.39}\% band, despite spanning self-confidence weighting and an external learned PRM. The learned ablation in Section~\ref{sec:learned} shows a similar range for logprob-based best-of-$N$ and learned surface+execution feature selectors. Even URSA-RM, the strongest external scorer, achieves only $+\recheck{0.76}\pp$ over Claim MV when used for weighted voting. Execution-only methods improve to \recheck{74--76\%}, but the large jump appears only when cross-layer agreement is used as a compositional signal: a PROVE-style $\kappa$ filter reaches \recheck{79.52}\%, and \ccv{} reaches \recheck{80.98}\%, a $+\recheck{10.41}\pp$ improvement over Claim MV and $+\recheck{4.80}\pp$ over EAV.
 
-Paired per-question tests over the fixed 1,709-question evaluation set confirm that these main gains are statistically reliable: \ccv{} improves over Claim MV by $+10.42\pp$ (95\% paired bootstrap CI $[8.48,12.40]\pp$; exact McNemar $p<10^{-12}$) and over EAV by $+4.80\pp$ (95\% CI $[3.39,6.26]\pp$; exact McNemar $p=5.7{\times}10^{-11}$). The gain is also not concentrated on the development split: on the disjoint heldout/OOD split (excluding dev 300), \ccv{} reaches 81.93\%. Finally, a sweep over the only tunable parameter, $\tau_{\text{exec}}$, shows that \ccv{} is robust rather than finely tuned: across $\tau_{\text{exec}}=5\ldots14$, dev accuracy varies by 1.00$\pp$ and heldout/OOD accuracy by 1.06$\pp$ (Appendix~\ref{app:tau-sensitivity}). The $\kappa$ matching threshold itself is also stable: varying the candidate-level relative tolerance around the default leaves \ccv{} accuracy unchanged on the full s240 pool (Appendix~\ref{app:kappa-threshold}).
+The original paired per-question analysis over \recheck{1,709} entries reported the following gains, confidence intervals, and tests, all of which require recomputation without GPS-full: \ccv{} improves over Claim MV by $+\recheck{10.42}\pp$ (95\% paired bootstrap CI $[\recheck{8.48},\recheck{12.40}]\pp$; exact McNemar $p<\recheck{10^{-12}}$) and over EAV by $+\recheck{4.80}\pp$ (95\% CI $[\recheck{3.39},\recheck{6.26}]\pp$; exact McNemar $p=\recheck{5.7{\times}10^{-11}}$). The original heldout analysis also reports gains away from the development split: on the disjoint heldout/OOD split (excluding dev 300), \ccv{} reaches \recheck{81.93}\%. Finally, a sweep over the development-selected threshold, $\tau_{\text{exec}}$, reports a broad plateau: across $\tau_{\text{exec}}=5\ldots14$, dev accuracy varies by 1.00$\pp$ and heldout/OOD accuracy by \recheck{1.06}$\pp$ (Appendix~\ref{app:tau-sensitivity}). The $\kappa$ matching threshold itself is also stable: varying the candidate-level relative tolerance around the default leaves \ccv{} accuracy unchanged on the full s240 pool (Appendix~\ref{app:kappa-threshold}).
 
 \afterpage{%
 \begin{table*}[t]
 \centering
-\caption{Evidence ladder across verification signal types ($K{=}16$). Surface/confidence methods, including learned PRM scores and self-judged confidence, cluster near 70--71\%. Execution-only signals improve moderately. Cross-layer compositional verification produces the large jump to 79--81\%.}
+\caption{Evidence ladder across verification signal types ($K{=}16$). All aggregates G3K, GeoQA, and GPS-c only; GPS (GPS-full), separated on the right, is a reference superset excluded from All. Red All values await recomputation. Bold marks the best non-oracle method in each column; PROVE-style filtering leads on GeoQA. Surface/confidence methods, including learned PRM scores and self-judged confidence, cluster near \recheck{70--71\%}. Execution-only signals improve moderately. Cross-layer compositional verification produces the large jump to \recheck{79--81\%}.}
 \label{tab:main}
 \small
-\begin{tabular}{llccccc}
+\begin{tabular}{llcccc|c}
 \toprule
-Method & Type & G3K & GeoQA & GPS-c & GPS & All \\
+Method & Type & G3K & GeoQA & GPS-c & All & GPS \\
 \midrule
 \multicolumn{7}{l}{\textit{Surface / confidence signals}} \\
-Claim MV & consensus & 66.72 & 73.61 & 72.60 & 69.23 & 70.57 \\
-Logprob-weighted MV & weighted consensus & 66.56 & 73.87 & 72.60 & 70.67 & 70.80 \\
-CISC $P(\mathrm{True})$-weighted & confidence consensus & 68.05 & 74.27 & 72.60 & 69.71 & 71.39 \\
-URSA-RM weighted MV & learned verifier & 62.73 & 75.60 & 79.45 & 75.00 & 71.33 \\
+Claim MV & consensus & 66.72 & 73.61 & 72.60 & \recheck{70.57} & 69.23 \\
+Logprob-weighted MV & weighted consensus & 66.56 & 73.87 & 72.60 & \recheck{70.80} & 70.67 \\
+CISC $P(\mathrm{True})$-weighted & confidence consensus & 68.05 & 74.27 & 72.60 & \recheck{71.39} & 69.71 \\
+URSA-RM weighted MV & learned verifier & 62.73 & 75.60 & 79.45 & \recheck{71.33} & 75.00 \\
 \midrule
 \multicolumn{7}{l}{\textit{Execution channel without cross-layer gating}} \\
-Exec MV & exec consensus & 72.71 & 75.60 & 76.71 & 72.60 & 74.31 \\
-EAV & exec-first priority & 74.04 & 77.72 & 77.40 & 75.96 & 76.18 \\
+Exec MV & exec consensus & 72.71 & 75.60 & 76.71 & \recheck{74.31} & 72.60 \\
+EAV & exec-first priority & 74.04 & 77.72 & 77.40 & \recheck{76.18} & 75.96 \\
 \midrule
 \multicolumn{7}{l}{\textit{Cross-layer compositional signals}} \\
-PROVE-style $\kappa$ filter & binary agreement & 76.54 & \textbf{82.10} & 81.51 & 77.40 & 79.52 \\
-\ccv{} (ours) & gated + routing & \textbf{78.54} & 81.83 & \textbf{86.30} & \textbf{81.25} & \textbf{80.98} \\
+PROVE-style $\kappa$ filter & binary agreement & 76.54 & \textbf{82.10} & 81.51 & \recheck{79.52} & 77.40 \\
+\ccv{} (ours) & gated + routing & \textbf{78.54} & 81.83 & \textbf{86.30} & \recheck{\textbf{80.98}} & \textbf{81.25} \\
 \midrule
-Oracle & upper bound & 93.51 & 93.50 & 91.78 & 92.79 & 93.27 \\
+Oracle & upper bound & 93.51 & 93.50 & 91.78 & \recheck{93.27} & 92.79 \\
 \bottomrule
 \end{tabular}
 \end{table*}
@@ -337,43 +378,68 @@ Oracle & upper bound & 93.51 & 93.50 & 91.78 & 92.79 & 93.27 \\
 
 To test whether \ccv{}'s gains depend on the specific base model, we repeat the full evaluation protocol with Gemma4-E4B, a 4B-parameter multimodal model with substantially weaker geometry reasoning capacity. The Gemma4 model achieves comparable \sketch{} format compliance to the Qwen model, so this experiment is a confirmation of the verification mechanism rather than a new generator contribution.
 
-Table~\ref{tab:cross-model} reports the cross-model evidence ladder using the same $\tau_{\text{exec}}{=}9$ for both models. First, the absolute accuracy gap is large: Claim MV drops from 70.57\% on Qwen3.5-9B to 44.94\% on Gemma4-E4B, consistent with the capacity difference. Second, the \ccv{} gain pattern is preserved: \ccv{} improves over Claim MV by $+10.41\pp$ on Qwen and $+7.84\pp$ on Gemma4. The Gemma4 result is especially diagnostic because its execution pathway alone is worse than the claim pathway (Exec MV 41.08\% vs Claim MV 44.94\%), making EAV ineffective (44.88\%). Yet \ccv{} still reaches 52.78\%, showing that it exploits structural cross-channel agreement rather than the raw accuracy advantage of execution votes.
+Table~\ref{tab:cross-model} reports the cross-model evidence ladder using the same $\tau_{\text{exec}}{=}9$ for both models. First, the absolute accuracy gap is large: Claim MV drops from \recheck{70.57}\% on Qwen3.5-9B to \recheck{44.94}\% on Gemma4-E4B, consistent with the capacity difference. Second, the \ccv{} gain pattern is preserved: \ccv{} improves over Claim MV by $+\recheck{10.41}\pp$ on Qwen and $+\recheck{7.84}\pp$ on Gemma4. The Gemma4 result is especially diagnostic because its execution pathway alone is worse than the claim pathway (Exec MV \recheck{41.08}\% vs Claim MV \recheck{44.94}\%), making EAV ineffective (\recheck{44.88}\%). Yet \ccv{} still reaches \recheck{52.78}\%, showing that it exploits structural cross-channel agreement rather than the raw accuracy advantage of execution votes.
 
-The mechanism predicted by Theorem~\ref{thm:accuracy} also replicates quantitatively: $\kappa$-filtering yields nearly identical precision gains across models ($+25.40\pp$ vs $+26.38\pp$), and the counterintuitive correlation pattern repeats ($\rho_\kappa>\rho_e$ while SNR improves; Table~\ref{tab:cross-model-diagnostics}). This supports the interpretation that cross-channel precision filtering is model-agnostic. The \ccv{} advantage also scales with $K$ on both Qwen and Gemma4 (Appendix~\ref{app:diagnostics}, Appendix~\ref{app:gemma-k-scaling}).
+The precision-filtering pattern also replicates quantitatively: $\kappa$-filtering yields nearly identical precision gains across models ($+\recheck{25.40}\pp$ vs $+\recheck{26.38}\pp$), and the counterintuitive correlation pattern repeats ($\rho_\kappa>\rho_e$ while SNR improves; Table~\ref{tab:cross-model-diagnostics}). This supports transfer between the two tested model families; it does not establish model-independent gains. The \ccv{} advantage also scales with $K$ on both Qwen and Gemma4 (Appendix~\ref{app:diagnostics}, Appendix~\ref{app:gemma-k-scaling}).
 
 \subsection{$K$ Scaling Analysis}
 
-Figure~\ref{fig:evidence-scaling} shows that the \ccv{} advantage scales with $K$: the gain over Claim MV grows from $+$5.60$\pp$ at $K{=}4$ to $+$10.41$\pp$ at $K{=}16$ (tabulated in Appendix~\ref{app:diagnostics}). Surface consensus saturates quickly (Claim MV gains only $+$1.23$\pp$ from $K{=}4$ to 16), while compositional verification continues extracting signal from larger candidate pools.
+Figure~\ref{fig:evidence-scaling} shows that the \ccv{} advantage scales with $K$: the gain over Claim MV grows from $+$\recheck{5.60}$\pp$ at $K{=}4$ to $+$\recheck{10.41}$\pp$ at $K{=}16$ (tabulated in Appendix~\ref{app:diagnostics}). Surface consensus saturates quickly (Claim MV gains only $+$\recheck{1.23}$\pp$ from $K{=}4$ to 16), while compositional verification continues extracting signal from larger candidate pools.
 
-As a negative control, VGF consensus---another within-layer signal---not only fails to help but \emph{hurts} performance when added (from 80.05\% to 79.93\%). This reinforces the central finding: within-layer consensus---whether the layer is claim, execution, or VGF---is vulnerable to correlated perception errors. Only cross-layer gating provides robust verification signal.
+As a negative control, VGF consensus---another within-layer signal---not only fails to help but \emph{hurts} performance when added (from \recheck{80.05}\% to \recheck{79.93}\%). This reinforces the central finding: within-layer consensus---whether the layer is claim, execution, or VGF---is vulnerable to correlated perception errors. In these comparisons, the substantial gains come from cross-layer gating.
 
 \subsection{Learned Feature Ablation}
 \label{sec:learned}
 
 To validate that the compositional features carry the transferable verification signal---not just that our specific CCV rule is effective---we train candidate-level logistic regression classifiers on Geometry3K dev (300 questions) and evaluate on disjoint OOD benchmarks.
 
-Table~\ref{tab:learned} reports the full ablation. The key result is that compositional features are the only transferable signal: logprob best-of-$N$, surface features, and surface+execution features remain near Claim MV (71.11--71.86\% OOD), while adding cross-layer features jumps to 79.85\% OOD and C-only features reach 81.02\%. The learned model rediscovers the gating principle: raw $\text{exec\_cluster\_size}$ has a negative coefficient ($-2.40$), while $\kappa \times \text{exec\_cluster}$ is strongly positive ($+1.96$). A simple rule is therefore enough: PROVE-style $\kappa$ filtering reaches 81.02\% OOD, and dual-output \ccv{} reaches 81.93\% OOD.
+Table~\ref{tab:learned} reports the full ablation. In this ablation, the substantial heldout gains come from compositional features: logprob best-of-$N$, surface features, and surface+execution features remain near Claim MV (\recheck{71.11--71.86}\% OOD), while adding cross-layer features jumps to \recheck{79.85}\% OOD and C-only features reach \recheck{81.02}\%. The learned model rediscovers the gating principle: raw $\text{exec\_cluster\_size}$ has a negative coefficient ($-2.40$), while $\kappa \times \text{exec\_cluster}$ is strongly positive ($+1.96$). A simple rule is therefore enough: PROVE-style $\kappa$ filtering reaches \recheck{81.02}\% OOD, and dual-output \ccv{} reaches \recheck{81.93}\% OOD.
 
-\subsection{Error Taxonomy and Recovery Analysis}
+\subsection{Recoveries and Regressions}
+\label{sec:errors}
 
-We analyze 355 cases where EAV fails but an oracle-correct candidate exists (full flow in Figure~\ref{fig:routing-sankey}). Wrong execution consensus accounts for 305/355 = 86\% of these failures. The largest recoverable subtype is Exec\ding{55}\,Claim\ding{51}: the execution majority is wrong, but the claim majority is correct. \ccv{} recovers 123/139 = \textbf{88.5\%} of this subtype by routing through candidates that survive claim--execution agreement. In contrast, Exec\ding{55}\,Claim\ding{55} cases, where both pathways support the same incorrect answer, remain mostly outside the reach of selection-only verification (8.3\% recovered). Among self-consistent candidates, reliability rises from 19\% at execution cluster size 1 to 93\% at size 8+, confirming that $\kappa$ must be combined with gated consensus rather than used as a standalone binary filter.
+\ccv{} changes answers in both directions. Relative to Claim MV, it records \recheck{237} wins and \recheck{59} losses (\recheck{4.02:1}); relative to EAV, it records \recheck{121} wins and \recheck{39} losses (\recheck{3.10:1}). The per-benchmark net gains over Claim MV are positive, ranging from $+8.22\pp$ on GeoQA to $+13.70\pp$ on GPS-clean. Appendix~\ref{app:regressions} reports both $2\times2$ exchange tables and the regression categories.
+
+The recovery-only taxonomy considers \recheck{355} EAV failures with an oracle-correct candidate. Wrong execution consensus accounts for \recheck{305/355} (\recheck{86\%}). For the Exec\ding{55}\,Claim\ding{51} subtype, where the execution majority is wrong but the claim majority is correct, \ccv{} recovers \recheck{123/139} (\recheck{88.5\%}). The Exec\ding{55}\,Claim\ding{55} subtype remains difficult (\recheck{8.3\%} recovered). These subtype counts and the paired exchange tables come from different reported analyses and must be reconciled in the aggregate audit; the flow figure describes recoveries, not net gains. Among self-consistent candidates, reliability rises from \recheck{19\%} at execution cluster size 1 to \recheck{93\%} at size 8+, supporting the combination of agreement and consensus.
+
+Regressions expose three limits. False $\kappa$ agreement explains \recheck{26/59} losses against Claim MV and \recheck{30/39} against EAV, often with small wrong agreement groups (median sizes \recheck{3} and \recheck{2}, respectively). Incorrect fallback execution consensus explains \recheck{33} losses against Claim MV: none of their candidates executes to the correct answer, and \recheck{15} have unanimous 16/16 execution consensus. Threshold effects account for \recheck{7} losses against EAV. Agreement and strong fallback consensus can both preserve shared errors.
 
 % ===========================================================================
 \section{Related Work}
 \label{sec:related}
 % ===========================================================================
 
-Geometry reasoning systems mainly improve the generator side of the problem. Specialized VLMs such as G-LLaVA~\cite{gao2023g}, GeoX~\cite{xia2024geox}, and MAVIS~\cite{zhang2024mavis} strengthen multimodal geometry solving on benchmarks such as Geometry3K~\cite{lu2021inter} and GeoQA~\cite{chen2021geoqa}. Neuro-symbolic solvers such as AlphaGeometry~\cite{trinh2024solving,chervonyi2025gold} and FormalGeo~\cite{zhang2023formalgeo} use symbolic structure to derive proofs or answers. Our work is complementary: it assumes a candidate pool already exists and studies how to verify candidates when shared diagram perception makes their errors correlated.
+Geometry reasoning systems mainly improve the generator side of the problem. Specialized VLMs such as G-LLaVA~\citep{gao2023g}, GeoX~\citep{xia2024geox}, and MAVIS~\citep{zhang2024mavis} strengthen multimodal geometry solving on benchmarks such as Geometry3K~\citep{lu2021inter} and GeoQA~\citep{chen2021geoqa}. Neuro-symbolic solvers such as AlphaGeometry~\citep{trinh2024solving,chervonyi2025gold} and FormalGeo~\citep{zhang2023formalgeo} use symbolic structure to derive proofs or answers. Our work is complementary: it assumes a candidate pool already exists and studies how to verify candidates when shared diagram perception makes their errors correlated.
 
-Test-time verification is usually based on either consensus or learned scoring. Self-consistency~\cite{wang2022self}, universal self-consistency~\cite{chen2023universal}, and confidence-weighted CISC~\cite{taubenfeld2025confidence} aggregate opaque answer votes, which works best when sampled errors are sufficiently independent. Learned verifiers, including ORMs/PRMs~\cite{cobbe2021training,uesato2022solving,lightman2023let,wang2024math}, GenRM~\cite{zhang2024generative}, URSA-RM~\cite{luo2025ursa}, and VisualPRM~\cite{wang2025visualprm}, train external scorers and add verifier-specific data or inference. \ccv{} differs from both paradigms by deriving verification signal from structure already present inside each candidate.
+Test-time verification is usually based on either consensus or learned scoring. Self-consistency~\citep{wang2022self}, universal self-consistency~\citep{chen2023universal}, and confidence-weighted CISC~\citep{taubenfeld2025confidence} aggregate opaque answer votes, which works best when sampled errors are sufficiently independent. Learned verifiers, including ORMs/PRMs~\citep{cobbe2021training,uesato2022solving,lightman2023let,wang2024math}, GenRM~\citep{zhang2024generative}, URSA-RM~\citep{luo2025ursa}, and VisualPRM~\citep{wang2025visualprm}, train external scorers and add verifier-specific data or inference. \ccv{} differs from both paradigms by deriving verification signal from structure already present inside each candidate.
 
-The closest line of work uses programs or error-correlation analysis to diagnose voting failures. PROVE~\cite{toh2024not} filters candidates whose translated Python output matches the natural-language answer, a binary consistency signal analogous to $\kappa$. Our framework generalizes this idea to geometry-specific neuro-symbolic outputs, where VGF, typed DSL, deterministic execution, and neural claims form a hierarchy of cross-layer signals. \citet{nitarach2026model} show that correlated errors limit majority voting; \ccv{} targets this regime directly by gating consensus through cross-channel agreement rather than trying to decorrelate samples.
+The closest line of work uses programs or error-correlation analysis to diagnose voting failures. PROVE~\citep{toh2024not} filters candidates whose translated Python output matches the natural-language answer, a binary consistency signal analogous to $\kappa$. Our framework generalizes this idea to geometry-specific neuro-symbolic outputs, where VGF, typed DSL, deterministic execution, and neural claims form a hierarchy of cross-layer signals. \citet{nitarach2026model} show that correlated errors limit majority voting; \ccv{} targets this regime directly by gating consensus through cross-channel agreement rather than trying to decorrelate samples.
 
 % ===========================================================================
+\section{Limitations}
+\label{sec:limitations}
+
+\paragraph{Coupled generation.}
+The claim and DSL are produced by one autoregressive model, and the claim conditions on the DSL source. Their mean within-question correctness correlation is $\phi=\recheck{0.325}$; they are not independent solutions. The likelihood-ratio condition characterizes retained-candidate precision, while pool-level selection gains remain empirical and can fail under correlated false agreement.
+
+\paragraph{Generator and teacher dependence.}
+The training-free verifier operates only once a \sketch{} pool exists. Our generators require LoRA SFT on teacher-assisted reformatted traces; this preparation is part of the method's cost and limits applicability to arbitrary existing candidate pools. Closed-source models might emit \sketch{} through few-shot prompting, but we have not tested this and make no performance claim for them.
+
+\paragraph{Format degradation and fallback.}
+Malformed or non-executable programs cannot contribute execution votes and are excluded from $\kappa$ agreement. Format degradation therefore shrinks the agreement pool and can trigger fallback, rather than silently treating a failed execution as concordant. This handling does not make fallback reliable: well-formed programs can execute incorrect premises, and strong execution consensus can still be wrong.
+
+\paragraph{Task and domain boundaries.}
+We validate numeric and multiple-choice geometry reasoning on two open-weight model families. Transfer to chart/table question answering, physics diagrams, or code generation is a hypothesis that should first be tested by estimating the agreement likelihood ratio on labeled pools. A ratio near one predicts little precision benefit. Open-ended geometry proofs require agreement at the level of proof-checker judgments, replacing numeric equality; that is a method extension, not a change of tolerance.
+
+\paragraph{Selection-only headroom.}
+Only \recheck{8.3\%} of the reported Exec\ding{55}\,Claim\ding{55} subtype is recovered. Selection cannot produce an answer absent from the candidate pool: reported oracle accuracies are \recheck{93.27\%} for Qwen and \recheck{91.75\%} for Gemma. This separates remaining error into cases where no correct candidate is available and cases where a correct candidate exists but the selector misses it. Premise verification or improved generation is needed to address the first component; the exchange tables characterize risks in the second.
+
 \section{Conclusion}
-% ===========================================================================
 
-We have shown that neuro-symbolic reasoning candidates carry an underutilized verification resource: their compositional structure. By formalizing cross-channel agreement as a verification principle, we derive a training-free algorithm that substantially outperforms both standard consensus methods and learned verifiers. The key insight---that agreement between structurally diverse pathways provides stronger evidence than repetition within any single pathway---is validated by a full evidence ladder: non-compositional confidence, consensus, and learned-score methods saturate around 70--71\%, while $\kappa$-based compositional methods reach 79--81\%. More broadly, output format is a verification design choice: domains that can expose perception, logic, computation, and conclusion as cross-validatable pathways may benefit from the same principle. Our current validation focuses on open-weight geometry models; extending \ccv{} to proprietary frontier models and adding independent premise verification are natural next steps.
+\sketch{} exposes a claim and an externally executed program result for each geometry candidate. \ccv{} is a training-free verifier over these structured pools, with no additional model calls at verification time. Its precision benefit requires agreement to be more likely for correct executions than for incorrect ones, a condition compatible with positively correlated channels and substantial false agreement. The reported geometry comparisons place non-compositional methods around \recheck{70--71\%} and cross-channel methods around \recheck{79--81\%}, with both recoveries and regressions; aggregate values await recomputation on three benchmarks, with GPS-full reported for reference. Benefits beyond geometry remain a hypothesis. A falsifiable next step is to measure the likelihood ratio on labeled chart/table QA, physics-diagram, and code-generation pools before testing pool-level selection gains.
+
+\paragraph{Planned release.}
+We will release evaluation and aggregation scripts, frozen candidate pools and per-question selections, external scorer files, and audit scripts to support reproducibility of the verification comparisons.
 
 % ===========================================================================
 % References - placeholder entries
@@ -391,7 +457,7 @@ We have shown that neuro-symbolic reasoning candidates carry an underutilized ve
 \section{Training Data Construction}
 \label{app:data-construction}
 
-Table~\ref{tab:data-construction} summarizes the full construction pipeline for the 2,012-example SFT set. We start from the official Geometry3K~\cite{lu2021inter} training split, use the geometry3k subset of Nemotron-Image-Training-v3~\cite{blakeman2025nvidia} as the Qwen3-VL-235B-A22B-Thinking CoT source, reformat each matched trace into the \sketch{} VGF+DSL+answer format with DeepSeek V4 Pro, and retain only examples whose DSL executes and matches the official answer. The reformatting stage is text-only: the expensive visual reasoning is supplied by the Qwen3-VL CoT trace, while the official gold answer is used as the final target for machine-checkable reformatting.
+Table~\ref{tab:data-construction} summarizes the full construction pipeline for the 2,012-example SFT set. We start from the official Geometry3K~\citep{lu2021inter} training split, use the geometry3k subset of Nemotron-Image-Training-v3~\citep{blakeman2025nvidia} as the Qwen3-VL-235B-A22B-Thinking CoT source, reformat each matched trace into the \sketch{} VGF+DSL+answer format with DeepSeek V4 Pro, and retain only examples whose DSL executes and matches the official answer. The reformatting stage is text-only: the expensive visual reasoning is supplied by the Qwen3-VL CoT trace, while the official gold answer is used as the final target for machine-checkable reformatting.
 
 \begin{table}[h]
 \centering
@@ -497,12 +563,12 @@ Teacher NL CoT:
 \section{$\tau_{\text{exec}}$ Sensitivity}
 \label{app:tau-sensitivity}
 
-The only tunable hyperparameter in \ccv{} is the execution-majority threshold $\tau_{\text{exec}}$, used only when the $\kappa$-pool is empty. We sweep $\tau_{\text{exec}}=1\ldots16$ on the main Qwen3.5-9B s240 $K{=}16$ rollout pool, using the same split protocol as the main paper: Geometry3K qid$<300$ for dev, and Geometry3K qid$\geq300$ plus GeoQA, MathVista-GPS clean, and MathVista-GPS for heldout/OOD evaluation. Figure~\ref{fig:tau-sensitivity} plots the full sweep, and Table~\ref{tab:tau-sensitivity} reports selected points. We use the resulting $\tau_{\text{exec}}{=}9$ for both Qwen3.5-9B and Gemma4-E4B.
+The development-selected parameter in \ccv{} is the execution-majority threshold $\tau_{\text{exec}}$, used only when the $\kappa$-pool is empty. We sweep $\tau_{\text{exec}}=1\ldots16$ on the main Qwen3.5-9B s240 $K{=}16$ rollout pool, using the same split protocol as the main paper: Geometry3K qid$<300$ for dev, and Geometry3K qid$\geq300$ plus GeoQA and GPS-clean for heldout/OOD evaluation; GPS-full is excluded. Figure~\ref{fig:tau-sensitivity} plots the full sweep, and Table~\ref{tab:tau-sensitivity} reports selected points. We use the resulting $\tau_{\text{exec}}{=}9$ for both Qwen3.5-9B and Gemma4-E4B.
 
 \begin{figure}[h]
     \centering
     \input{figures/ccv_tau_exec_sensitivity}
-    \caption{\textbf{Sensitivity to $\tau_{\text{exec}}$.} \ccv{} is stable over a broad range of execution thresholds. In the plateau $\tau_{\text{exec}}=5\ldots14$, dev accuracy varies from 76.00\% to 77.00\%, and heldout/OOD accuracy varies from 80.77\% to 81.83\%.}
+    \caption{\textbf{Sensitivity to $\tau_{\text{exec}}$.} \ccv{} is stable over a broad range of execution thresholds. In the plateau $\tau_{\text{exec}}=5\ldots14$, dev accuracy varies from 76.00\% to 77.00\%, and heldout/OOD accuracy varies from \recheck{80.77\%} to \recheck{81.83\%}. Embedded curve statistics await recomputation without GPS-full.}
     \label{fig:tau-sensitivity}
 \end{figure}
 
@@ -515,9 +581,9 @@ The only tunable hyperparameter in \ccv{} is the execution-majority threshold $\
 \toprule
 $\tau_{\text{exec}}$ & Dev@300 & Heldout/OOD & All \\
 \midrule
-1 (no threshold) & 76.67 & 80.13 & 79.52 \\
-9 (selected) & \textbf{77.00} & \textbf{81.83} & \textbf{80.98} \\
-16 (maximum) & 75.67 & 81.19 & 80.22 \\
+1 (no threshold) & 76.67 & \recheck{80.13} & \recheck{79.52} \\
+9 (selected) & \textbf{77.00} & \recheck{\textbf{81.83}} & \recheck{\textbf{80.98}} \\
+16 (maximum) & 75.67 & \recheck{81.19} & \recheck{80.22} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -537,8 +603,8 @@ This appendix contains the diagnostic tables and flow visualization referenced b
 \toprule
 Model & $p_e$ (\%) & $p_\kappa$ (\%) & $\Delta p$ (pp) & $\rho_e$ & $\rho_\kappa$ & mean $K_\kappa$ & SNR raw$\rightarrow\kappa$ \\
 \midrule
-Qwen3.5-9B & 61.70 & 87.10 & $+25.40$ & 0.526 & 0.646 & 9.09 & 0.32$\rightarrow$1.33 \\
-Gemma4-E4B & 33.43 & 59.81 & $+26.38$ & 0.504 & 0.630 & 5.77 & $-$0.48$\rightarrow$0.24 \\
+Qwen3.5-9B & \recheck{61.70} & \recheck{87.10} & \recheck{$+25.40$} & \recheck{0.526} & \recheck{0.646} & \recheck{9.09} & \recheck{0.32$\rightarrow$1.33} \\
+Gemma4-E4B & \recheck{33.43} & \recheck{59.81} & \recheck{$+26.38$} & \recheck{0.504} & \recheck{0.630} & \recheck{5.77} & \recheck{$-$0.48$\rightarrow$0.24} \\
 \bottomrule
 \end{tabular}
 }
@@ -546,16 +612,16 @@ Gemma4-E4B & 33.43 & 59.81 & $+26.38$ & 0.504 & 0.630 & 5.77 & $-$0.48$\rightarr
 
 \begin{table}[h]
 \centering
-\caption{Performance across $K$ on the four-benchmark Qwen3.5-9B pool.}
+\caption{Performance across $K$ for the three primary benchmarks, with GPS-full reported separately for reference. The original aggregate values shown here await recomputation excluding GPS-full.}
 \label{tab:scaling}
 \small
 \begin{tabular}{rccccc}
 \toprule
 $K$ & Claim MV & Exec MV & \ccv{} & Oracle & \ccv{} $-$ Claim MV \\
 \midrule
-4 & 69.34 & 68.98 & 74.94 & 84.74 & $+$5.60 \\
-8 & 70.38 & 72.43 & 77.88 & 89.89 & $+$7.50 \\
-16 & 70.57 & 74.31 & 80.98 & 93.27 & $+$10.41 \\
+4 & \recheck{69.34} & \recheck{68.98} & \recheck{74.94} & \recheck{84.74} & \recheck{$+$5.60} \\
+8 & \recheck{70.38} & \recheck{72.43} & \recheck{77.88} & \recheck{89.89} & \recheck{$+$7.50} \\
+16 & \recheck{70.57} & \recheck{74.31} & \recheck{80.98} & \recheck{93.27} & \recheck{$+$10.41} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -569,15 +635,15 @@ $K$ & Claim MV & Exec MV & \ccv{} & Oracle & \ccv{} $-$ Claim MV \\
 \toprule
 Method / Features & Dev@300 & OOD & All & \shortstack{$\Delta$ OOD\\vs Claim MV} \\
 \midrule
-Claim MV (reference) & 66.67 & 71.77 & 70.57 & 0.00 \\
-Best-of-$N$ (logprob) & 66.00 & 71.11 & 69.75 & $-$0.67 \\
-LogReg S-only & 67.00 & 71.86 & 70.74 & $+$0.08 \\
-LogReg S+E & 66.33 & 71.69 & 70.63 & $-$0.08 \\
-LogReg S+E+C & 74.67 & 79.85 & 78.47 & $+$8.08 \\
-LogReg C-only & 75.33 & 81.02 & 79.64 & $+$9.24 \\
+Claim MV (reference) & 66.67 & \recheck{71.77} & \recheck{70.57} & \recheck{0.00} \\
+Best-of-$N$ (logprob) & 66.00 & \recheck{71.11} & \recheck{69.75} & \recheck{$-$0.67} \\
+LogReg S-only & 67.00 & \recheck{71.86} & \recheck{70.74} & \recheck{$+$0.08} \\
+LogReg S+E & 66.33 & \recheck{71.69} & \recheck{70.63} & \recheck{$-$0.08} \\
+LogReg S+E+C & 74.67 & \recheck{79.85} & \recheck{78.47} & \recheck{$+$8.08} \\
+LogReg C-only & 75.33 & \recheck{81.02} & \recheck{79.64} & \recheck{$+$9.24} \\
 \midrule
-PROVE-style $\kappa$ filter (rule) & 75.00 & 81.02 & 79.52 & $+$9.24 \\
-Dual-output \ccv{} (ours, rule) & 77.00 & 81.93 & 80.98 & $+$10.16 \\
+PROVE-style $\kappa$ filter (rule) & 75.00 & \recheck{81.02} & \recheck{79.52} & \recheck{$+$9.24} \\
+Dual-output \ccv{} (ours, rule) & 77.00 & \recheck{81.93} & \recheck{80.98} & \recheck{$+$10.16} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -585,38 +651,38 @@ Dual-output \ccv{} (ours, rule) & 77.00 & 81.93 & 80.98 & $+$10.16 \\
 \begin{figure*}[t]
     \centering
     \includegraphics[width=\textwidth]{figures/figure4.pdf}
-    \caption{\textbf{Error flow and dynamic routing.} Among 355 EAV failures with an oracle-correct candidate, wrong execution consensus dominates (86\%) and splits into three subtypes: Exec{\ding{55}}\,Claim{\ding{51}}, Exec{\ding{55}}\,Claim{\ding{55}}, and Exec{\ding{55}}\,Claim?. In the recoverable Exec{\ding{55}}\,Claim{\ding{51}} stream, the claim majority is correct while the execution majority is wrong; \ccv{}'s $\kappa$ filter routes 123/139 cases (88.5\%) to the correct neural-claim output, illustrating how output-pathway routing rescues samples when the symbolic channel collapses.}
+    \caption{\textbf{Error flow and dynamic routing.} Among \recheck{355} EAV failures with an oracle-correct candidate, wrong execution consensus dominates (\recheck{86\%}) and splits into three subtypes: Exec{\ding{55}}\,Claim{\ding{51}}, Exec{\ding{55}}\,Claim{\ding{55}}, and Exec{\ding{55}}\,Claim?. In the recoverable Exec{\ding{55}}\,Claim{\ding{51}} stream, the claim majority is correct while the execution majority is wrong; \ccv{}'s $\kappa$ filter routes \recheck{123/139} cases (\recheck{88.5\%}) to the correct neural-claim output, illustrating how output-pathway routing rescues samples when the symbolic channel collapses. This figure shows only the recovery direction; regressions are reported in Tables~\ref{tab:exchange-claim}--\ref{tab:regression-types}. Embedded counts await audit against those paired tables.}
     \label{fig:routing-sankey}
 \end{figure*}
 
 \section{Cross-Model Validation}
 \label{app:cross-model}
 
-Table~\ref{tab:cross-model} evaluates the same verification protocol on a lower-capacity Gemma4-E4B generator, using the same $\tau_{\text{exec}}{=}9$ as Qwen3.5-9B. The Gemma4 pool uses the same frozen $K{=}16$ four-benchmark setting as the main Qwen3.5-9B experiments: Geometry3K test (601), GeoQA test (754), MathVista-GPS clean (146), and MathVista-GPS (208), for $N{=}1709$ questions and 27,344 candidates. The evaluation uses the standard benchmark files; it does not use the deprecated 400-question checkpoint-selection set.
+Table~\ref{tab:cross-model} evaluates the same verification protocol on a lower-capacity Gemma4-E4B generator, using the same $\tau_{\text{exec}}{=}9$ as Qwen3.5-9B. The Gemma4 pool uses the same frozen $K{=}16$ protocol as Qwen: Geometry3K test (601), GeoQA test (754), and GPS-clean (146) form the three primary benchmarks, with GPS-full (208) reported for reference. The original overlapping aggregate contained \recheck{1,709} entries and \recheck{27,344} candidates; all aggregate results below await recomputation excluding GPS-full. The evaluation uses the standard benchmark files; it does not use the deprecated 400-question checkpoint-selection set.
 
 \begin{table}[h]
 \centering
-\caption{Cross-model validation on the same frozen $K{=}16$ four-benchmark protocol ($N{=}1709$), using $\tau_{\text{exec}}{=}9$ for both models. Absolute accuracy differs because Qwen3.5-9B has higher model capacity than Gemma4-E4B, but the gain pattern is consistent: cross-layer $\kappa$ filtering and \ccv{} improve over surface consensus for both models without additional inference.}
+\caption{Cross-model validation on the same frozen $K{=}16$ protocol for three primary benchmarks, with GPS-full excluded from the aggregate and reported for reference, using $\tau_{\text{exec}}{=}9$ for both models. Absolute accuracy differs because Qwen3.5-9B has higher model capacity than Gemma4-E4B, but the gain pattern is consistent: cross-layer $\kappa$ filtering and \ccv{} improve over surface consensus for both models with no additional model calls for verification on existing \sketch{} pools. Red values are the original aggregates pending recomputation; generator SFT and teacher-assisted reformatting costs are separate (Appendix~\ref{app:costs}).}
 \label{tab:cross-model}
 \small
 \begin{tabular}{lcc}
 \toprule
 Method & Qwen3.5-9B & Gemma4-E4B \\
 \midrule
-Claim MV & 70.57 & 44.94 \\
-Exec MV & 74.31 & 41.08 \\
-EAV & 76.18 & 44.88 \\
-PROVE-style $\kappa$ filter & 79.52 & 51.90 \\
-\ccv{} (ours) & \textbf{80.98} & \textbf{52.78} \\
+Claim MV & \recheck{70.57} & \recheck{44.94} \\
+Exec MV & \recheck{74.31} & \recheck{41.08} \\
+EAV & \recheck{76.18} & \recheck{44.88} \\
+PROVE-style $\kappa$ filter & \recheck{79.52} & \recheck{51.90} \\
+\ccv{} (ours) & \recheck{\textbf{80.98}} & \recheck{\textbf{52.78}} \\
 \midrule
-\ccv{} $-$ Claim MV & $+10.41$ & $+7.84$ \\
-\ccv{} $-$ EAV & $+4.80$ & $+7.90$ \\
-Oracle & 93.27 & 91.75 \\
+\ccv{} $-$ Claim MV & \recheck{$+10.41$} & \recheck{$+7.84$} \\
+\ccv{} $-$ EAV & \recheck{$+4.80$} & \recheck{$+7.90$} \\
+Oracle & \recheck{93.27} & \recheck{91.75} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The notable difference is that Gemma4 reverses the raw pathway ordering: Exec MV is below Claim MV (41.08\% vs 44.94\%), whereas Qwen's execution pathway is stronger than its claim pathway. Consequently, EAV, an execution-first priority rule, is ineffective on Gemma4 (44.88\% vs 44.94\% Claim MV). This pattern is expected for a smaller model with weaker visual grounding: within-layer execution consensus is more easily dominated by correlated perception errors. The result therefore strengthens rather than weakens the verification story. \ccv{} does not trust the raw execution vote; it uses claim--execution agreement as a precision filter. Even when the execution pathway is worse in aggregate, candidates where claim and execution agree remain informative, yielding $+7.84\pp$ over Claim MV and $+7.90\pp$ over EAV on Gemma4.
+The notable difference is that Gemma4 reverses the raw pathway ordering: Exec MV is below Claim MV (\recheck{41.08}\% vs \recheck{44.94}\%), whereas Qwen's execution pathway is stronger than its claim pathway. Consequently, EAV, an execution-first priority rule, is ineffective on Gemma4 (\recheck{44.88}\% vs \recheck{44.94}\% Claim MV). One possible explanation is weaker visual grounding: within-layer execution consensus is more easily dominated by correlated perception errors. The observed gain does not require execution to be the stronger raw channel. \ccv{} does not trust the raw execution vote; it uses claim--execution agreement as a precision filter. Even when the execution pathway is worse in aggregate, candidates where claim and execution agree remain informative, yielding $+\recheck{7.84}\pp$ over Claim MV and $+\recheck{7.90}\pp$ over EAV on Gemma4.
 
 \section{Gemma4 $K$ Scaling}
 \label{app:gemma-k-scaling}
@@ -633,15 +699,15 @@ Table~\ref{tab:gemma-k-scaling} repeats the $K$-scaling analysis on the frozen G
 \toprule
 $K$ & Claim MV & Exec MV & EAV & PROVE-style $\kappa$ & \ccv{} & Oracle & \ccv{} $-$ Claim MV \\
 \midrule
-4 & $42.41{\pm}0.81$ & $37.60{\pm}0.42$ & $46.94{\pm}0.46$ & $46.65{\pm}0.74$ & $47.28{\pm}0.60$ & $72.24{\pm}0.60$ & $+4.87$ \\
-8 & $44.00{\pm}0.48$ & $39.86{\pm}0.24$ & $48.82{\pm}0.79$ & $50.04{\pm}0.62$ & $50.85{\pm}0.58$ & $83.84{\pm}0.32$ & $+6.85$ \\
-16 & 44.94 & 41.08 & 44.88 & 51.90 & 52.78 & 91.75 & $+7.84$ \\
+4 & \recheck{$42.41{\pm}0.81$} & \recheck{$37.60{\pm}0.42$} & \recheck{$46.94{\pm}0.46$} & \recheck{$46.65{\pm}0.74$} & \recheck{$47.28{\pm}0.60$} & \recheck{$72.24{\pm}0.60$} & \recheck{$+4.87$} \\
+8 & \recheck{$44.00{\pm}0.48$} & \recheck{$39.86{\pm}0.24$} & \recheck{$48.82{\pm}0.79$} & \recheck{$50.04{\pm}0.62$} & \recheck{$50.85{\pm}0.58$} & \recheck{$83.84{\pm}0.32$} & \recheck{$+6.85$} \\
+16 & \recheck{44.94} & \recheck{41.08} & \recheck{44.88} & \recheck{51.90} & \recheck{52.78} & \recheck{91.75} & \recheck{$+7.84$} \\
 \bottomrule
 \end{tabular}
 }
 \end{table}
 
-The Gemma4 gain increases with candidate budget, from $+4.87\pp$ at $K{=}4$ to $+7.84\pp$ at $K{=}16$, matching the qualitative scaling trend observed for Qwen.
+The Gemma4 gain increases with candidate budget, from $+\recheck{4.87}\pp$ at $K{=}4$ to $+\recheck{7.84}\pp$ at $K{=}16$, matching the qualitative scaling trend observed for Qwen.
 
 \section{Gemma4 Implementation Details}
 \label{app:gemma-implementation}
@@ -662,16 +728,16 @@ The relation $X_i\approx Y_i$ is implemented by normalizing the claimed final an
 \toprule
 Setting & Candidate relative tolerance & \ccv{} accuracy & $\kappa$ candidates / precision \\
 \midrule
-$10^{-6}$ & 0.000001 & 80.98 & 15,535 / 87.07 \\
-$10^{-4}$ & 0.0001 & 80.98 & 15,535 / 87.07 \\
-$10^{-3}$ & 0.001 & 80.98 & 15,535 / 87.07 \\
-default ($10^{-2}$) & 0.01 & 80.98 & 15,535 / 87.07 \\
-$5{\times}10^{-2}$ & 0.05 & 80.98 & 15,535 / 87.07 \\
+$10^{-6}$ & 0.000001 & \recheck{80.98} & \recheck{15,535 / 87.07} \\
+$10^{-4}$ & 0.0001 & \recheck{80.98} & \recheck{15,535 / 87.07} \\
+$10^{-3}$ & 0.001 & \recheck{80.98} & \recheck{15,535 / 87.07} \\
+default ($10^{-2}$) & 0.01 & \recheck{80.98} & \recheck{15,535 / 87.07} \\
+$5{\times}10^{-2}$ & 0.05 & \recheck{80.98} & \recheck{15,535 / 87.07} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-All threshold settings yield identical results because geometry answers are effectively discrete: integers, simple fractions, radicals, angles, or multiple-choice letters. In this domain, claim--execution agreement is almost always binary: pairs either match exactly, or differ by margins much larger than even the loosest tolerance. The matching tolerance is therefore not a meaningful hyperparameter for these benchmarks, and the measured \ccv{} gain is not an artifact of finely tuned numeric equality.
+All threshold settings yield identical results because geometry answers are effectively discrete: integers, simple fractions, radicals, angles, or multiple-choice letters. In this domain, claim--execution agreement is almost always binary: pairs either match exactly, or differ by margins much larger than even the loosest tolerance. This sweep supports stability over the tested relative tolerances on the original pool; the revised aggregate and other constants are audited separately (Appendix~\ref{app:constants}).
 
 \section{Qualitative Case Studies}
 \label{app:case-studies}
@@ -686,13 +752,16 @@ We present four representative cases from the frozen Qwen3.5-9B s240 $K{=}16$, $
 \noindent \textbf{Method outputs.} Claim MV: B; Exec MV: C; EAV: C; \ccv{}: \textbf{B}.
 \smallskip
 
+\begin{minipage}{\linewidth}
 \noindent \textbf{CCV-selected DSL} ($\kappa=1$, claim cluster 9, exec cluster 6):
 \begin{verbatim}
 angle_X = angle_L
 x = angle_X / 4
 answer = x          # 16.25 -> B
 \end{verbatim}
-\ccv{} selects a $\kappa$-consistent candidate whose claim and execution agree on B, while EAV follows a wrong execution majority (C). This is the canonical recoverable failure: the neural pathway is correct but the symbolic pathway is corrupted by shared perception error.
+\end{minipage}
+
+\ccv{} selects a $\kappa$-consistent candidate whose claim and execution agree on B, while EAV follows a wrong execution majority (C). In this example the claim majority is correct and the execution majority is wrong, while the selected candidate agrees on the correct option.
 
 \subsection{Hard Case: Exec\ding{55}\,Claim\ding{55}}
 
@@ -702,12 +771,15 @@ answer = x          # 16.25 -> B
 \noindent \textbf{Method outputs.} Claim MV: B; Exec MV: B; EAV: B; \ccv{}: B.
 \smallskip
 
+\begin{minipage}{\linewidth}
 \noindent \textbf{CCV-selected DSL} ($\kappa=1$, claim cluster 15, exec cluster 15):
 \begin{verbatim}
 x = 4
 answer = x          # 4.0 -> B
 \end{verbatim}
-All methods agree on the wrong answer. This case sits outside selection-only verification because the cross-channel agreement is itself wrong---both pathways share the same perceptual error.
+\end{minipage}
+
+All methods agree on the wrong answer. This case shows that cross-channel agreement can itself be wrong; agreement alone cannot establish correct premises.
 
 \subsection{Correlated Perception Error}
 
@@ -717,6 +789,7 @@ All methods agree on the wrong answer. This case sits outside selection-only ver
 \noindent \textbf{Method outputs.} Claim MV: B; Exec MV: B; EAV: B; \ccv{}: B.
 \smallskip
 
+\begin{minipage}{\linewidth}
 \noindent \textbf{CCV-selected DSL} ($\kappa=1$, claim cluster 16, exec cluster 16):
 \begin{verbatim}
 arc_BC = 30
@@ -724,6 +797,8 @@ arc_AD = 20
 angle_2 = (arc_BC + arc_AD) / 2
 answer = angle_2    # 25.0 -> B
 \end{verbatim}
+\end{minipage}
+
 This is a boundary case for \ccv{}: a correlated visual error makes both channels self-consistent around the wrong answer. With 16/16 candidates in both clusters, selection alone has no alternative evidence to break the incorrect consensus.
 
 \subsection{Empty $\kappa$-Pool with Execution Fallback}
@@ -734,6 +809,7 @@ This is a boundary case for \ccv{}: a correlated visual error makes both channel
 \noindent \textbf{Method outputs.} Claim MV: D; Exec MV: C; EAV: C; \ccv{}: \textbf{C}.
 \smallskip
 
+\begin{minipage}{\linewidth}
 \noindent \textbf{CCV-selected DSL} ($\kappa=0$, claim cluster 10, exec cluster 16):
 \begin{verbatim}
 leg1 = 24
@@ -741,95 +817,228 @@ hypotenuse = 74
 x = sqrt(hypotenuse**2 - leg1**2)
 answer = x          # 70.0 -> C
 \end{verbatim}
+\end{minipage}
+
 The $\kappa$-pool is empty (no candidate's claim matches its execution), so \ccv{} falls back to the execution-majority pathway. The large exec cluster (16/16) exceeds $\tau_{\text{exec}}$, providing the correct answer. This illustrates dual-pathway routing: when cross-channel agreement is absent, the deterministic symbolic path remains available as a fallback.
 
 \section{Proofs for the Cross-Channel Verification Analysis}
 \label{app:proofs}
 
-\subsection{Latent shared-perception model}
+\subsection{Definitions without an independence assumption}
 
-We formalize the verification problem using answer-valued random variables. Let $X_i$ denote the claim answer and $Y_i$ the executed answer for candidate $i$, both taking values in an answer space $\mathcal{Z}$ with correct answer $z^*$. A latent visual state $V$ is shared across candidates. Conditional on $V$, the executed answers $Y_i$ are i.i.d. from $P_e(\cdot \mid V)$; the claim answers $X_i$ are i.i.d. from $P_c(\cdot)$, independent of $V$; and $X_i$ and $Y_i$ are conditionally independent given $V$. This is an idealized model: empirically, we only require false self-consistency to be sufficiently rare, not perfect independence.
+Let $X_i$ be a normalized claim and $Y_i$ a normalized execution answer, allowing $Y_i=\bot$ for failure; $z^*$ denotes the ground-truth answer for the corresponding question. Let $E_i=\mathbf{1}[Y_i=z^*]$ and $C_i=\mathbf{1}[X_i=z^*]$. Agreement is $\kappa_i=\mathbf{1}[X_i=Y_i,\,Y_i\neq\bot]$. Failed executions count as incorrect and cannot agree. The precision identities hold for any joint distribution of $(X_i,Y_i)$, including the dependence created by generating the claim after the DSL source.
 
-Define $p_e=P(Y_i=z^*)=\mathbb{E}_V[P_e(z^*\mid V)]$ and $p_c=P(X_i=z^*)=P_c(z^*)$. For execution correctness indicators $E_i=\mathbf{1}[Y_i=z^*]$, the within-channel execution correlation is
-\begin{equation}
-    \rho_e=\operatorname{Corr}(E_i,E_j)
-    =
-    \frac{\operatorname{Var}_V[P_e(z^*\mid V)]}{p_e(1-p_e)}.
-    \label{eq:rho_e}
-\end{equation}
-By the law of total covariance applied to $E_i=\mathbf{1}[Y_i=z^*]$ for $i\neq j$, $\operatorname{Cov}(E_i,E_j)=\operatorname{Var}_V[P_e(z^*\mid V)]$, so shared perception creates positive correlation whenever execution accuracy varies with the visual state.
+Within-channel correlation $\rho_e=\operatorname{Corr}(E_i,E_j)$ summarizes different candidates from the same question; $\rho_\kappa$ is its counterpart within retained candidate pairs. In contrast, the within-question $\phi$ coefficient correlates $C_i$ and $E_i$ across candidates of one question. We report its mean over questions where both binary variables have nonzero variance. These correlations measure different dependence relationships and cannot be substituted for one another.
 
-\subsection{Proof of Theorem~\ref{thm:accuracy}}
+\subsection{Precision identity and likelihood-ratio proof}
 
-Let $\kappa_i=\mathbf{1}[X_i=Y_i]$. Decompose self-consistency into true and false agreement:
+Theorem~\ref{thm:accuracy} follows by partitioning agreement into correct and incorrect execution: $P(\kappa=1)=t_\kappa+f_\kappa$. Bayes' rule gives $p_\kappa=t_\kappa/(t_\kappa+f_\kappa)$ whenever the denominator is positive.
+
+For Proposition~\ref{prop:likelihood}, let $a=P(\kappa=1\mid E=1)$ and $b=P(\kappa=1\mid E=0)$. Since $0<p_e<1$ and $P(\kappa=1)>0$,
 \begin{align}
-    t_\kappa &= P(X_i=Y_i=z^*), \\
-    f_\kappa &= P(X_i=Y_i\neq z^*)=\sum_{z\neq z^*}P(X_i=z,Y_i=z).
+ p_\kappa&=\frac{p_ea}{p_ea+(1-p_e)b},\\
+ p_\kappa-p_e&=\frac{p_e(1-p_e)(a-b)}{p_ea+(1-p_e)b},\\
+ p_\kappa>p_e&\Longleftrightarrow a>b.
 \end{align}
-Then $P(\kappa_i=1)=t_\kappa+f_\kappa$, and by Bayes rule:
-\begin{equation}
-    P(Y_i=z^*\mid \kappa_i=1)
-    =
-    \frac{t_\kappa}{t_\kappa+f_\kappa}.
-\end{equation}
-This identity does not require independence; it simply states that self-consistent candidates are correct when agreement is true rather than false.
-
-Under the latent shared-perception model, conditional independence of $X_i$ and $Y_i$ given $V$ yields $t_\kappa=P_c(z^*)\,\mathbb{E}_V[P_e(z^*\mid V)]=p_cp_e$.
-If wrong answers are approximately dispersed uniformly over $M{-}1$ alternatives, then
-\begin{equation}
-    f_\kappa \approx \frac{(1-p_c)(1-p_e)}{M-1}.
-\end{equation}
-The condition $p_\kappa>p_e$ reduces to $p_c(1-p_e)>f_\kappa$. Substituting the uniform-dispersion approximation gives $p_c>(1-p_c)/(M-1)$, i.e., $p_c>1/M$ for $p_e<1$. Thus cross-channel agreement improves per-candidate precision whenever the claim pathway is better than random over the effective answer space.
-
-\subsection{Proof of Theorem~\ref{thm:snr}}
-
-For $n$ exchangeable binary correctness variables with $P(B_i=1)=p$ and pairwise correlation $\rho$, the variance of the sample mean is $p(1-p)[1+(n-1)\rho]/n$. Applying the SNR definition from the main text to raw exec voting $(p_e,K,\rho_e)$ and to the retained $\kappa$-filtered pool $(p_\kappa,K_\kappa,\rho_\kappa)$ gives $\mathrm{SNR}_\kappa>\mathrm{SNR}_{\mathrm{raw}}$ iff
-\begin{equation}
-    \frac{p_\kappa-\tfrac{1}{2}}{p_e-\tfrac{1}{2}}
-    >
-    \sqrt{
-    \frac{p_\kappa(1-p_\kappa)}{p_e(1-p_e)}
-    \cdot
-    \frac{K(1+(K_\kappa-1)\rho_\kappa)}{K_\kappa(1+(K-1)\rho_e)}
-    }.
-    \label{eq:snr_full_condition}
-\end{equation}
-
-\begin{corollary}[Answer dispersion amplifies cross-channel advantage]
-\label{cor:dispersion}
-Under the uniform-dispersion approximation, as the effective answer space $M$ grows, $f_\kappa\rightarrow 0$ and hence $p_\kappa\rightarrow 1$. If the retained pool remains nonempty and the correlation factor remains bounded, then $\mathrm{SNR}_\kappa\rightarrow\infty$ while raw exec SNR is unchanged.
-\end{corollary}
-
-\subsection{Numerical illustration}
-\label{app:numerical}
-
-We instantiate the SNR proxy using measured post-hoc statistics from the full dataset. Failed executions are counted as incorrect; correlations are Pearson correlations over ordered within-question candidate pairs. Raw exec voting uses $K=16$, $p_e=0.617$, and $\rho_e=0.526$. The retained pool has mean size $K_\kappa=9.09$, $p_\kappa=0.871$, and $\rho_\kappa=0.646$. Table~\ref{tab:numerical-snr} summarizes the resulting SNR proxy values.
+For $b>0$, dividing the first expression by its complement yields Eq.~\eqref{eq:posterior-odds}. If $b=0$, positive retention implies $a>0$ and $p_\kappa=1$; if $a=b=0$, the retained pool is empty and its precision is undefined. No conditional-independence or wrong-answer-dispersion assumption is needed.
 
 \begin{table}[h]
 \centering
-\caption{Measured statistics for the one-vs-rest SNR proxy.}
+\caption{Agreement diagnostics on the original pools, all pending recomputation under the three-benchmark protocol. The pooled likelihood ratio is $a/b$; the question-stratified Mantel--Haenszel estimate excludes failed executions and is a separate association diagnostic, not the ratio used in the pooled odds identity. Pool-level CCV gains are measured separately.}
+\label{tab:likelihood}
+\small
+\begin{tabular}{lcc}
+\toprule
+Metric & Qwen3.5-9B & Gemma4-E4B \\
+\midrule
+$P(\mathrm{agree}\mid\mathrm{exec}\ \checkmark)$ & \recheck{0.802} & \recheck{0.646} \\
+$P(\mathrm{agree}\mid\mathrm{exec}\ \times)$ & \recheck{0.192} & \recheck{0.218} \\
+Pooled likelihood ratio $a/b$ & \recheck{$4.18\times$} & \recheck{$2.96\times$} \\
+Within-question Mantel--Haenszel (excluding $\bot$) & \recheck{$3.22\times$} & \recheck{$2.09\times$} \\
+CCV relative to Claim MV & \recheck{$+10.41\pp$} & \recheck{$+7.84\pp$} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:likelihood} reports agreement enrichment for both model families. Before deployment on a new labeled pool, this comparison can reject settings with little expected precision benefit. Question-stratified diagnostics help distinguish within-question association from differences in question difficulty. Neither diagnostic establishes that the resulting selector will win a pool-level vote.
+
+\subsection{SNR derivation and scope of Theorem~\ref{thm:snr}}
+
+For $n$ exchangeable binary correctness indicators with common mean $p$ and pairwise correlation $\rho$,
+\begin{equation}
+ \operatorname{Var}\!\left(\frac{1}{n}\sum_{i=1}^n B_i\right)
+ =\frac{p(1-p)}{n}\,[1+(n-1)\rho].
+\end{equation}
+Dividing $p-\tfrac12$ by the standard deviation gives the SNR in Theorem~\ref{thm:snr}. This variance identity is exact under the stated assumptions; using SNR to approximate majority reliability requires an additional distributional approximation and does not describe multiclass answer counts exactly.
+
+For $p_e>\tfrac12$, nonempty fixed retained size $K_\kappa$, and positive variances, $\mathrm{SNR}_\kappa>\mathrm{SNR}_{\mathrm{raw}}$ is equivalent to
+\begin{equation}
+    \frac{p_\kappa-\tfrac{1}{2}}{p_e-\tfrac{1}{2}}
+    >\sqrt{\frac{p_\kappa(1-p_\kappa)}{p_e(1-p_e)}
+    \cdot\frac{K(1+(K_\kappa-1)\rho_\kappa)}{K_\kappa(1+(K-1)\rho_e)}}.
+    \label{eq:snr_full_condition}
+\end{equation}
+When $p_e\leq\tfrac12$, compare the signed SNR expressions directly instead of dividing by $p_e-\tfrac12$; in particular, the displayed inequality cannot be applied unchanged to Gemma. Substituting a mean retained size for random $K_\kappa$ is another approximation. Candidate-level precision improvement alone does not establish this SNR comparison, and neither establishes a gain for CCV's weighted selection and fallback policy.
+
+\subsection{Measured diagnostic illustration}
+\label{app:numerical}
+
+Table~\ref{tab:numerical-snr} preserves the original post-hoc Qwen statistics. Failed executions count as incorrect; within-channel correlations use ordered candidate pairs from the same question. The retained size is a mean, so these are descriptive SNR proxies rather than predicted selection accuracies.
+
+\begin{table}[h]
+\centering
+\caption{Original statistics for the one-vs-rest SNR proxy, pending recomputation.}
 \label{tab:numerical-snr}
 \small
 \begin{tabular}{lcccc}
 \toprule
 Method & $n$ & $p$ & $\rho$ & SNR \\
 \midrule
-Raw exec MV & 16 & 0.617 & 0.526 & 0.32 \\
-$\kappa$-filtered MV & 9.09 & 0.871 & 0.646 & 1.33 \\
+Raw exec MV & 16 & \recheck{0.617} & \recheck{0.526} & \recheck{0.32} \\
+$\kappa$-filtered MV & \recheck{9.09} & \recheck{0.871} & \recheck{0.646} & \recheck{1.33} \\
 \bottomrule
 \end{tabular}
 \end{table}
-The retained pool is therefore 23\% more correlated, but the SNR proxy improves by $4.1\times$. This empirical regime is exactly the counterintuitive case captured by Theorem~\ref{thm:snr}: precision filtering dominates the correlation penalty. The observed false self-consistency rate is 12.9\%, so most $\kappa{=}1$ candidates correspond to true rather than accidental agreement.
 
-\newpage
-\input{checklist.tex}
+The original retained pool is \recheck{23\%} more correlated while the SNR proxy improves by \recheck{$4.1\times$}. False agreement accounts for \recheck{12.9\%} of Qwen's retained candidates and \recheck{40.2\%} of Gemma's. Gemma's retained precision nevertheless rises from \recheck{33.4\%} to \recheck{59.8\%}: false agreement need not be negligible for the likelihood-ratio condition to hold. Pool-level improvements require separate empirical verification.
 
-\end{document}
-t}
-\end{document}
-$\kappa{=}1$ candidates correspond to true rather than accidental agreement.
+\section{Bidirectional Selection Analysis}
+\label{app:regressions}
 
-\newpage
+The exchange tables compare per-question correctness in both directions. Every count and derived win/loss ratio retains its reported value pending recomputation after excluding GPS-full. These paired tables and the older recovery-flow taxonomy must be reconciled during that audit; the recovery-only figure is not a substitute for net-change accounting.
+
+\begin{table}[h]
+\centering
+\caption{Claim MV versus CCV correctness. Rows are Claim MV outcomes; columns are CCV outcomes. CCV records \recheck{237} wins and \recheck{59} losses (\recheck{4.02:1}).}
+\label{tab:exchange-claim}
+\small
+\begin{tabular}{lcc}
+\toprule
+ & CCV correct & CCV incorrect \\
+\midrule
+Claim MV correct & \recheck{1,147} & \recheck{59} \\
+Claim MV incorrect & \recheck{237} & \recheck{266} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[h]
+\centering
+\caption{EAV versus CCV correctness. Rows are EAV outcomes; columns are CCV outcomes. CCV records \recheck{121} wins and \recheck{39} losses (\recheck{3.10:1}).}
+\label{tab:exchange-eav}
+\small
+\begin{tabular}{lcc}
+\toprule
+ & CCV correct & CCV incorrect \\
+\midrule
+EAV correct & \recheck{1,263} & \recheck{39} \\
+EAV incorrect & \recheck{121} & \recheck{286} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[h]
+\centering
+\caption{Reported regression categories. The available taxonomy does not exhaustively account for the EAV losses; categories and totals await reconciliation rather than assigning an unsupported residual.}
+\label{tab:regression-types}
+\small
+\begin{tabular}{lcc}
+\toprule
+Category & Against Claim MV & Against EAV \\
+\midrule
+False $\kappa$ agreement & \recheck{26/59} & \recheck{30/39} \\
+Median wrong agreement-group size & \recheck{3} & \recheck{2} \\
+Incorrect execution fallback & \recheck{33} & Not specified \\
+Threshold effect & Not applicable & \recheck{7} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+In all \recheck{33} incorrect execution-fallback cases against Claim MV, no candidate executes to the correct answer; \recheck{15} exhibit unanimous 16/16 execution consensus. These failures show why a large fallback cluster cannot certify correct visual premises. The reported false-agreement losses often involve small retained groups, showing the separate risk of discarding a correct raw majority.
+
+\section{Verification and Preparation Costs}
+\label{app:costs}
+
+Table~\ref{tab:costs} separates verification on an existing pool from the preparation needed to obtain it. CCV needs no additional model calls after SKETCH candidates have been generated, but the complete pipeline includes teacher reformatting and generator SFT. The entries below are the available cost observations, not a complete compute ledger for all experiments or teacher calls.
+
+\begin{table}[h]
+\centering
+\caption{Available cost comparison. Pool-dependent totals are marked for recomputation. DSL execution is shared by execution-based selectors; external scorers incur separate model inference.}
+\label{tab:costs}
+\small
+\begin{tabular}{lp{0.60\linewidth}}
+\toprule
+Component & Cost \\
+\midrule
+CCV aggregation & 2--4 ms/question on one CPU core; \recheck{4--7 s} for the original pool \\
+DSL execution & $<$\recheck{10 s} for \recheck{27,344} candidates; shared with Exec MV, EAV, and PROVE-style filtering \\
+SKETCH candidate length & Mean approximately \recheck{86} tokens \\
+One-time LoRA SFT & Approximately 3.5 GPU-hours to the evaluated checkpoint; approximately 10.6 GPU-hours for the full run \\
+URSA-RM weighted MV & One reward-model forward pass per candidate \\
+CISC & One confidence self-assessment per candidate \\
+Teacher reformatting & Required for generator preparation; complete compute accounting pending \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Other Matching and Scoring Constants}
+\label{app:constants}
+
+Besides the development-selected execution threshold and the relative-tolerance sweep in Appendix~\ref{app:kappa-threshold}, the reported sensitivity checks cover absolute tolerance, answer-clustering tolerance, option mapping, and the claim-cluster weight. Absolute and clustering tolerance sweeps span four orders of magnitude with unchanged reported accuracy. The default option-mapping tolerance of 0.02 is not a local optimum, and claim weights in $[0,2]$ yield little variation. Table~\ref{tab:constants} records the available scope without inventing missing endpoints or accuracy values; those numeric results remain pending.
+
+\begin{table}[h]
+\centering
+\caption{Sensitivity-table structure for the remaining constants. ``Pending'' denotes a numeric result absent from the supplied revision material, to be filled by the engineering audit. Red sweep results require recomputation.}
+\label{tab:constants}
+\small
+\begin{tabular}{lp{0.32\linewidth}p{0.30\linewidth}}
+\toprule
+Constant & Available sweep scope & Reported result / numeric accuracy \\
+\midrule
+Absolute tolerance & Four orders of magnitude; endpoints pending & Unchanged / \recheck{pending} \\
+Clustering tolerance & Four orders of magnitude; endpoints pending & Unchanged / \recheck{pending} \\
+Option-mapping tolerance & Default 0.02; grid pending & Default not a local optimum / \recheck{pending} \\
+Claim-cluster weight & $[0,2]$; default 0.5 & Small variation / \recheck{pending} \\
+Agreement bonus & Common $+1$ in $\mathcal C_\kappa$ & No effect on argmax (exact) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Why the $+1$ bonus is irrelevant to selection.}
+For every $c_i\in\mathcal C_\kappa$, $\kappa_i=1$ and the score is $w_c|\mathrm{claim\_cluster}_i|+|\mathrm{exec\_cluster}_i|+1$. Removing the common constant preserves all score orderings and ties. When $\mathcal C_\kappa$ is empty, neither fallback branch uses this score. Thus the bonus cannot change the algorithm's output under a fixed tie-breaking rule.
+
+\clearpage
+\section{Notation}
+\label{app:notation}
+
+\begin{table}[h]
+\centering
+\caption{Notation for agreement, precision, dependence, and routing.}
+\label{tab:notation}
+\small
+\begin{tabular}{lp{0.76\linewidth}}
+\toprule
+Symbol & Meaning \\
+\midrule
+$X_i,Y_i,z^*$ & Normalized neural claim, execution result, and correct answer \\
+$\bot$ & Failed execution; counted as incorrect and excluded from agreement \\
+$K,K_\kappa$ & Candidate count and retained agreement-pool size \\
+$\kappa_i$ & Claim--execution agreement indicator, excluding $\bot$ \\
+$\mathcal C_\kappa$ & Set of candidates with $\kappa_i=1$ \\
+$t_\kappa,f_\kappa$ & Joint probabilities of agreement with correct and incorrect execution \\
+$p_e,p_\kappa$ & Execution precision before and after agreement filtering \\
+$a,b$ & Agreement probabilities conditional on correct and incorrect execution \\
+$a/b$ & Agreement likelihood ratio in the posterior-odds identity \\
+$\rho_e,\rho_\kappa$ & Execution-correctness correlation between within-question candidate pairs, before and after filtering \\
+$\phi$ & Within-question correlation between claim and execution correctness across candidates \\
+$\tau_{\mathrm{exec}}$ & Minimum execution-cluster size for execution fallback \\
+$\mu_i$ & Cross-candidate, cross-layer agreement feature used in the learned ablation \\
+$w_c$ & Claim-cluster weight, fixed to 0.5 in CCV \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\clearpage
 \input{checklist.tex}
 
 \end{document}
