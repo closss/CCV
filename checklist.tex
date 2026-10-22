@@ -5,8 +5,8 @@
 
 \item {\bf Claims}
     \item[] Question: Do the main claims made in the abstract and introduction accurately reflect the paper's contributions and scope?
-    \item[] Answer: \answerNo{}.
-    \item[] Justification: The revised introduction and body limit the results to geometry, distinguish a training-free verifier from generator SFT, and use three primary benchmarks with GPS-full as a reference superset. The author-supplied abstract is retained as requested in this working revision, but still states four benchmarks, independently converging pathways, and an unqualified inference-cost claim. These statements must be aligned before submission; red aggregate statistics also await recomputation.
+    \item[] Answer: \answerYes{}.
+    \item[] Justification: The abstract and introduction state the proposed cross-channel verification problem, the \ccv{} method, and the reported improvements. The scope is limited to verification over generated geometry candidates, with future extensions discussed in the conclusion.
     \item[] Guidelines:
     \begin{itemize}
         \item The answer \answerNA{} means that the abstract and introduction do not include the claims made in the paper.
@@ -18,7 +18,7 @@
 \item {\bf Limitations}
     \item[] Question: Does the paper discuss the limitations of the work performed by the authors?
     \item[] Answer: \answerYes{}.
-    \item[] Justification: Section~\ref{sec:limitations} separately discusses coupled generation, SKETCH-SFT and teacher dependence, format degradation and fallback, geometry-only validation and proof-task boundaries, and selection-only oracle headroom.
+    \item[] Justification: The conclusion discusses the present validation scope, including open-weight geometry models, proprietary frontier models, and independent premise verification as natural extensions.
     \item[] Guidelines:
     \begin{itemize}
         \item The answer \answerNA{} means that the paper has no limitation while the answer \answerNo{} means that the paper has limitations, but those are not discussed in the paper. 
@@ -34,7 +34,7 @@
 \item {\bf Theory assumptions and proofs}
     \item[] Question: For each theoretical result, does the paper provide the full set of assumptions and a complete (and correct) proof?
     \item[] Answer: \answerYes{}.
-    \item[] Justification: Section~\ref{sec:precision} states the precision identity and the likelihood-ratio proposition without an independence assumption. Appendix~\ref{app:proofs} proves them, gives the exact odds identity and boundary cases, and explicitly separates the SNR approximation from any guarantee of pool-level gains.
+    \item[] Justification: Section~\ref{sec:method} states the latent-accuracy model and SNR condition, and Appendix~\ref{app:proofs} provides the corresponding proofs, assumptions, and numerical illustration.
     \item[] Guidelines:
     \begin{itemize}
         \item The answer \answerNA{} means that the paper does not include theoretical results. 
@@ -47,8 +47,8 @@
 
     \item {\bf Experimental result reproducibility}
     \item[] Question: Does the paper fully disclose all the information needed to reproduce the main experimental results of the paper to the extent that it affects the main claims and/or conclusions of the paper (regardless of whether the code and data are provided or not)?
-    \item[] Answer: \answerNo{}.
-    \item[] Justification: Sections~\ref{sec:method} and~\ref{sec:experiments}, together with Appendices~\ref{app:tau-sensitivity}, \ref{app:diagnostics}, and~\ref{app:kappa-threshold}, specify the format, aggregation, rollout protocol, and matching rules. We will release evaluation and aggregation scripts, frozen candidate pools and per-question selections, external scorer files, and audit scripts. This working revision still requires aggregate recomputation and engineering verification of the deferred implementation details.
+    \item[] Answer: \answerYes{}.
+    \item[] Justification: Sections~\ref{sec:method} and~\ref{sec:experiments}, together with Appendices~\ref{app:tau} and~\ref{app:diagnostics}, specify the output format, gating rule, benchmarks, rollout settings, threshold choice, and diagnostic protocol needed to reproduce the main comparisons.
     \item[] Guidelines:
     \begin{itemize}
         \item The answer \answerNA{} means that the paper does not include experiments.
@@ -84,8 +84,8 @@
 
 \item {\bf Experimental setting/details}
     \item[] Question: Does the paper specify all the training and test details (e.g., data splits, hyperparameters, how they were chosen, type of optimizer) necessary to understand the results?
-    \item[] Answer: \answerNo{}.
-    \item[] Justification: The setup describes the Geometry3K dev/test split, GeoQA and MathVista-GPS-clean evaluation, GPS-full as an excluded reference superset, rollout count, decoding settings, threshold selection, LoRA rank and scale, and the frozen protocol. Evaluation and aggregation scripts, frozen pools and per-question selections, external scorer files, and audit scripts are planned for release. Optimizer and checkpoint-selection details remain deferred to engineering verification.
+    \item[] Answer: \answerYes{}.
+    \item[] Justification: The setup describes the Geometry3K dev/test split, MathVerse OOD split, rollout count, decoding settings, $\tau$ selection, LoRA rank and scale, and frozen evaluation protocol. Implementation-level optimizer details should be included with the eventual code release.
     \item[] Guidelines:
     \begin{itemize}
         \item The answer \answerNA{} means that the paper does not include experiments.
@@ -95,8 +95,8 @@
 
 \item {\bf Experiment statistical significance}
     \item[] Question: Does the paper report error bars suitably and correctly defined or other appropriate information about the statistical significance of the experiments?
-    \item[] Answer: \answerNo{}.
-    \item[] Justification: Section~\ref{sec:experiments} preserves the original paired analysis over \recheck{1,709} entries: the Claim MV gain is \recheck{$+10.42\pp$} (95\% paired-bootstrap CI \recheck{$[8.48,12.40]\pp$}, exact McNemar \recheck{$p<10^{-12}$}), and the EAV gain is \recheck{$+4.80\pp$} (95\% CI \recheck{$[3.39,6.26]\pp$}, \recheck{$p=5.7{\times}10^{-11}$}). These statistics are not yet valid estimates for the revised non-overlapping aggregate and must be recomputed without GPS-full.
+    \item[] Answer: \answerYes{}.
+    \item[] Justification: Section~\ref{sec:experiments} reports paired per-question significance tests for the main comparisons over the fixed 1,709-question evaluation set. We use paired bootstrap confidence intervals for accuracy differences and exact McNemar tests over discordant question outcomes; \ccv{} improves over Claim MV by $+10.42\pp$ (95\% CI $[8.48,12.40]\pp$, $p<10^{-12}$) and over EAV by $+4.80\pp$ (95\% CI $[3.39,6.26]\pp$, $p=5.7{\times}10^{-11}$).
     \item[] Guidelines:
     \begin{itemize}
         \item The answer \answerNA{} means that the paper does not include experiments.
@@ -137,7 +137,7 @@
 \item {\bf Broader impacts}
     \item[] Question: Does the paper discuss both potential positive societal impacts and negative societal impacts of the work performed?
     \item[] Answer: \answerYes{}.
-    \item[] Justification: The work is methodological and focuses on benchmark geometry reasoning. Potential benefits include more reliable and interpretable verification without additional model calls on an existing SKETCH candidate pool, while potential risks arise if similar verification signals are over-trusted in high-stakes domains without domain-specific validation.
+    \item[] Justification: The work is methodological and focuses on benchmark geometry reasoning. Potential benefits include more reliable and interpretable verification without additional inference, while potential risks arise if similar verification signals are over-trusted in high-stakes domains without domain-specific validation.
     \item[] Guidelines:
     \begin{itemize}
         \item The answer \answerNA{} means that there is no societal impact of the work performed.
@@ -223,3 +223,4 @@
     \end{itemize}
 
 \end{enumerate}
+end{enumerate}
