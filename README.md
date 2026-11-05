@@ -12,8 +12,6 @@ Official code repository for **CCV: Compositional Consensus Verification for Mul
 
 ## Paper
 
-[![First page of the CCV paper](assets/paper-preview.png)](CCV_NeurIPS2026.pdf)
-
 📄 [Read the full camera-ready paper (PDF)](CCV_NeurIPS2026.pdf) — opens in GitHub's built-in PDF viewer.
 
 *CCV: Compositional Consensus Verification for Multimodal Geometry Reasoning.* BibTeX citation will be added once the final publication metadata is available.
