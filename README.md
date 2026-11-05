@@ -1,3 +1,5 @@
+🎉 **Our paper has been accepted at NeurIPS 2026!**
+
 # CCV: Compositional Consensus Verification for Multimodal Geometry Reasoning
 
 [![Status: Coming Soon](https://img.shields.io/badge/status-coming%20soon-orange)](#release-plan)
